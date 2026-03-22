@@ -1,0 +1,247 @@
+//
+//  ChatView.swift
+//  Kagi Assistant
+//
+
+import SwiftUI
+import AppKit
+
+struct ChatView: View {
+    @Bindable var viewModel: ChatViewModel
+    @State private var messageText = ""
+    @State private var textEditorHeight: CGFloat = 32
+
+    var body: some View {
+        if let thread = viewModel.selectedThread {
+            VStack(spacing: 0) {
+                messageList(for: thread)
+                Divider()
+                inputArea
+            }
+            .navigationTitle(thread.name)
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        viewModel.createThread()
+                    } label: {
+                        Image(systemName: "square.and.pencil")
+                    }
+                    .help("New Chat")
+                }
+            }
+        } else {
+            ContentUnavailableView(
+                "No Chat Selected",
+                systemImage: "bubble.left.and.bubble.right",
+                description: Text("Select a chat from the sidebar or create a new one.")
+            )
+        }
+    }
+
+    private func messageList(for thread: ChatThread) -> some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    ForEach(thread.messages) { message in
+                        MessageBubble(message: message)
+                            .id(message.id)
+                    }
+                }
+                .padding()
+            }
+            .onChange(of: thread.messages.count) {
+                if let lastMessage = thread.messages.last {
+                    withAnimation {
+                        proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                    }
+                }
+            }
+        }
+    }
+
+    private var inputArea: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            AutoResizingTextView(
+                text: $messageText,
+                desiredHeight: $textEditorHeight,
+                maxLines: 10,
+                placeholder: "Type a message..."
+            )
+            .frame(height: textEditorHeight)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.primary.opacity(0.15), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            Button {
+                send()
+            } label: {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.title2)
+            }
+            .buttonStyle(.plain)
+            .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .keyboardShortcut(.return, modifiers: .command)
+        }
+        .padding(12)
+    }
+
+    private func send() {
+        let text = messageText
+        messageText = ""
+        viewModel.sendMessage(text)
+    }
+}
+
+// MARK: - Auto-resizing NSTextView wrapper
+
+struct AutoResizingTextView: NSViewRepresentable {
+    @Binding var text: String
+    @Binding var desiredHeight: CGFloat
+    var maxLines: Int
+    var placeholder: String
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
+        scrollView.borderType = .noBorder
+        scrollView.drawsBackground = false
+
+        let textView = NSTextView()
+        textView.delegate = context.coordinator
+        textView.font = NSFont.preferredFont(forTextStyle: .body)
+        textView.textColor = NSColor.labelColor
+        textView.backgroundColor = .clear
+        textView.isRichText = false
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isAutomaticTextReplacementEnabled = false
+        textView.allowsUndo = true
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.textContainerInset = NSSize(width: 4, height: 8)
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.lineFragmentPadding = 4
+        textView.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        scrollView.documentView = textView
+        context.coordinator.textView = textView
+
+        // Set initial single-line height
+        let lineHeight = textView.font!.boundingRectForFont.height
+        let inset = textView.textContainerInset
+        DispatchQueue.main.async {
+            self.desiredHeight = lineHeight + inset.height * 2
+        }
+
+        return scrollView
+    }
+
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        guard let textView = scrollView.documentView as? NSTextView else { return }
+
+        if textView.string != text {
+            textView.string = text
+            context.coordinator.recalcHeight()
+        }
+
+        context.coordinator.parent = self
+        context.coordinator.updatePlaceholder()
+    }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: AutoResizingTextView
+        weak var textView: NSTextView?
+        private var placeholderView: NSTextField?
+
+        init(_ parent: AutoResizingTextView) {
+            self.parent = parent
+        }
+
+        func textDidChange(_ notification: Notification) {
+            guard let textView else { return }
+            parent.text = textView.string
+            recalcHeight()
+            updatePlaceholder()
+        }
+
+        func recalcHeight() {
+            guard let textView else { return }
+
+            let font = textView.font ?? NSFont.preferredFont(forTextStyle: .body)
+            let lineHeight = font.boundingRectForFont.height
+            let inset = textView.textContainerInset
+            let singleLineHeight = lineHeight + inset.height * 2
+            let maxHeight = lineHeight * CGFloat(parent.maxLines) + inset.height * 2
+
+            textView.layoutManager?.ensureLayout(for: textView.textContainer!)
+            let usedHeight = textView.layoutManager?.usedRect(for: textView.textContainer!).height ?? lineHeight
+            let naturalHeight = usedHeight + inset.height * 2
+
+            let targetHeight = max(singleLineHeight, min(naturalHeight, maxHeight))
+
+            DispatchQueue.main.async {
+                self.parent.desiredHeight = targetHeight
+            }
+        }
+
+        func updatePlaceholder() {
+            guard let textView else { return }
+
+            if placeholderView == nil {
+                let field = NSTextField(labelWithString: parent.placeholder)
+                field.textColor = .tertiaryLabelColor
+                field.font = textView.font
+                field.translatesAutoresizingMaskIntoConstraints = false
+                textView.addSubview(field)
+
+                let inset = textView.textContainerInset
+                let padding = textView.textContainer?.lineFragmentPadding ?? 0
+                NSLayoutConstraint.activate([
+                    field.leadingAnchor.constraint(equalTo: textView.leadingAnchor, constant: inset.width + padding),
+                    field.topAnchor.constraint(equalTo: textView.topAnchor, constant: inset.height)
+                ])
+                placeholderView = field
+            }
+
+            placeholderView?.isHidden = !textView.string.isEmpty
+        }
+    }
+}
+
+// MARK: - Message Bubble
+
+struct MessageBubble: View {
+    let message: ChatMessage
+
+    private var isUser: Bool { message.role == .user }
+
+    var body: some View {
+        HStack {
+            if isUser { Spacer(minLength: 60) }
+
+            VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
+                Text(isUser ? "You" : "Assistant")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Text(message.content)
+                    .padding(10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(isUser ? Color.accentColor.opacity(0.15) : Color.secondary.opacity(0.1))
+                    )
+                    .textSelection(.enabled)
+            }
+
+            if !isUser { Spacer(minLength: 60) }
+        }
+    }
+}

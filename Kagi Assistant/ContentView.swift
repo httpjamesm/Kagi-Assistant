@@ -8,14 +8,16 @@
 import SwiftUI
 
 struct ContentView: View {
+    @State private var viewModel = ChatViewModel()
+
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        NavigationSplitView {
+            SidebarView(viewModel: viewModel)
+                .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 320)
+        } detail: {
+            ChatView(viewModel: viewModel)
         }
-        .padding()
+        .frame(minWidth: 600, minHeight: 400)
     }
 }
 
