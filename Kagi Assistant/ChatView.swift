@@ -96,6 +96,16 @@ struct ChatView: View {
 
 // MARK: - Auto-resizing NSTextView wrapper
 
+private class InputTextView: NSTextView {
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "a" {
+            selectAll(nil)
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+}
+
 struct AutoResizingTextView: NSViewRepresentable {
     @Binding var text: String
     @Binding var desiredHeight: CGFloat
@@ -114,7 +124,7 @@ struct AutoResizingTextView: NSViewRepresentable {
         scrollView.borderType = .noBorder
         scrollView.drawsBackground = false
 
-        let textView = NSTextView()
+        let textView = InputTextView()
         textView.delegate = context.coordinator
         textView.font = NSFont.preferredFont(forTextStyle: .body)
         textView.textColor = NSColor.labelColor
