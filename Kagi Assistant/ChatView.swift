@@ -11,6 +11,7 @@ struct ChatView: View {
     @Binding var showModelPicker: Bool
     @State private var messageText = ""
     @State private var textEditorHeight: CGFloat = 32
+    @State private var shouldAutoScroll = true
 
     var body: some View {
         if let thread = viewModel.selectedThread {
@@ -50,19 +51,27 @@ struct ChatView: View {
                         MessageBubble(message: message)
                             .id(message.id)
                     }
+                    Color.clear
+                        .frame(height: 1)
+                        .id("bottom")
                 }
                 .padding()
             }
+            .onScrollGeometryChange(for: Bool.self) { geo in
+                geo.contentOffset.y + geo.containerSize.height >= geo.contentSize.height - 20
+            } action: { _, isAtBottom in
+                shouldAutoScroll = isAtBottom
+            }
             .onChange(of: thread.messages.count) {
-                if let lastMessage = thread.messages.last {
+                if shouldAutoScroll {
                     withAnimation {
-                        proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                        proxy.scrollTo("bottom", anchor: .bottom)
                     }
                 }
             }
             .onChange(of: thread.messages.last?.content) {
-                if let lastMessage = thread.messages.last {
-                    proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                if shouldAutoScroll {
+                    proxy.scrollTo("bottom", anchor: .bottom)
                 }
             }
         }

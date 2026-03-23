@@ -249,7 +249,7 @@ actor KagiAPIClient {
         prompt: String,
         threadId: String? = nil,
         branchId: String? = nil,
-        model: String = "claude-3-5-sonnet",
+        model: String,
         profileId: String? = nil,
         internetAccess: Bool = true
     ) -> AsyncThrowingStream<StreamChunk, Error> {
