@@ -480,7 +480,7 @@ private struct ModelPopoverGroupView: View {
                 showPopover = false
             } label: {
                 HStack {
-                    Text(profile.model ?? profile.name ?? "Unknown")
+                    Text(profile.name ?? profile.model ?? "Unknown")
                     Spacer()
                     if profile.name == viewModel.selectedModel {
                         Image(systemName: "checkmark")

@@ -18,8 +18,12 @@ final class ChatViewModel {
     var sessionToken: String = ""
     var userEmail: String?
     var profiles: [KagiProfile] = []
-    var selectedModel: String = "gemini-3-1-flash-lite"
-    var internetAccess: Bool = true
+    var selectedModel: String = UserDefaults.standard.string(forKey: "selectedModel") ?? "gemini-3-1-flash-lite" {
+        didSet { UserDefaults.standard.set(selectedModel, forKey: "selectedModel") }
+    }
+    var internetAccess: Bool = UserDefaults.standard.object(forKey: "internetAccess") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(internetAccess, forKey: "internetAccess") }
+    }
     var currentTraceId: String?
 
     private let api = KagiAPIClient.shared
