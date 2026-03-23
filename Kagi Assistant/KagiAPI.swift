@@ -102,6 +102,8 @@ struct KagiProfile: Decodable, Identifiable {
     let model_name: String?
     let model_input_limit: Int?
     let internet_access: Bool?
+
+    var stableId: String { id ?? model ?? name ?? UUID().uuidString }
 }
 
 struct KagiCitation: Sendable {

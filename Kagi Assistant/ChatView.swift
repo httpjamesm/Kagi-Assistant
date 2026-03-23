@@ -20,6 +20,9 @@ struct ChatView: View {
             }
             .navigationTitle(thread.name)
             .toolbar {
+                ToolbarItem(placement: .automatic) {
+                    ModelPicker(viewModel: viewModel)
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         viewModel.createThread()
@@ -303,5 +306,64 @@ struct MessageBubble: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Model Picker
+
+struct ModelPicker: View {
+    @Bindable var viewModel: ChatViewModel
+
+    private var selectedProfileName: String {
+        if let profile = viewModel.profiles.first(where: { $0.model == viewModel.selectedModel }) {
+            return profile.name ?? profile.model ?? "Unknown"
+        }
+        return viewModel.selectedModel
+    }
+
+    var body: some View {
+        Menu {
+            ForEach(groupedProviders, id: \.provider) { group in
+                Section(group.provider) {
+                    ForEach(group.profiles, id: \.stableId) { profile in
+                        Toggle(isOn: Binding(
+                            get: { profile.model == viewModel.selectedModel },
+                            set: { if $0 { viewModel.selectedModel = profile.model ?? "" } }
+                        )) {
+                            Text(profile.name ?? profile.model ?? "Unknown")
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "cpu")
+                Text(selectedProfileName)
+                    .lineLimit(1)
+            }
+            .font(.caption)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Select model")
+        .disabled(viewModel.profiles.isEmpty)
+    }
+
+    private struct ProviderGroup: Identifiable {
+        let provider: String
+        let profiles: [KagiProfile]
+        var id: String { provider }
+    }
+
+    private var groupedProviders: [ProviderGroup] {
+        let grouped = Dictionary(grouping: viewModel.profiles) { profile in
+            profile.model_provider ?? "Other"
+        }
+        return grouped.map { ProviderGroup(provider: $0.key, profiles: $0.value) }
+            .sorted { a, b in
+                if a.provider == "kagi" { return true }
+                if b.provider == "kagi" { return false }
+                return a.provider < b.provider
+            }
     }
 }

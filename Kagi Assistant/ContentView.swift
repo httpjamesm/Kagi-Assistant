@@ -27,16 +27,6 @@ struct ContentView: View {
                             Text(email)
                         }
 
-                        if !viewModel.profiles.isEmpty {
-                            Divider()
-                            Picker("Model", selection: $viewModel.selectedModel) {
-                                ForEach(viewModel.profiles) { profile in
-                                    Text(profile.model_name ?? profile.model ?? "Unknown")
-                                        .tag(profile.model ?? "")
-                                }
-                            }
-                        }
-
                         Divider()
                         Button("Sign Out") {
                             Task { await viewModel.logout() }
