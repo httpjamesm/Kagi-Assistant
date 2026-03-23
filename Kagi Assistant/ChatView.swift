@@ -392,7 +392,7 @@ struct ModelPicker: View {
     @Binding var showPopover: Bool
 
     private var selectedProfileName: String {
-        if let profile = viewModel.profiles.first(where: { $0.model == viewModel.selectedModel }) {
+        if let profile = viewModel.profiles.first(where: { $0.name == viewModel.selectedModel }) {
             return profile.name ?? profile.model ?? "Unknown"
         }
         return viewModel.selectedModel
@@ -404,8 +404,8 @@ struct ModelPicker: View {
                 Section(group.provider) {
                     ForEach(group.profiles, id: \.stableId) { profile in
                         Toggle(isOn: Binding(
-                            get: { profile.model == viewModel.selectedModel },
-                            set: { if $0 { viewModel.selectedModel = profile.model ?? "" } }
+                            get: { profile.name == viewModel.selectedModel },
+                            set: { if $0 { viewModel.selectedModel = profile.name ?? "" } }
                         )) {
                             Text(profile.name ?? profile.model ?? "Unknown")
                         }
@@ -476,13 +476,13 @@ private struct ModelPopoverGroupView: View {
             .foregroundStyle(.secondary)
         ForEach(group.profiles, id: \.stableId) { profile in
             Button {
-                viewModel.selectedModel = profile.model ?? ""
+                viewModel.selectedModel = profile.name ?? ""
                 showPopover = false
             } label: {
                 HStack {
-                    Text(profile.name ?? profile.model ?? "Unknown")
+                    Text(profile.model ?? profile.name ?? "Unknown")
                     Spacer()
-                    if profile.model == viewModel.selectedModel {
+                    if profile.name == viewModel.selectedModel {
                         Image(systemName: "checkmark")
                             .foregroundStyle(Color.accentColor)
                     }
