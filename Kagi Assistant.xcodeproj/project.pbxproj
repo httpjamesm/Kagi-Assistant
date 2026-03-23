@@ -6,8 +6,13 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		29D8C632C4B544AD90B64148 /* message.css in Resources */ = {isa = PBXBuildFile; fileRef = 4A1BC3485DE54C34B10CFCA4 /* message.css */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		1AB70C872F70B09A00B0D8B8 /* Kagi Assistant.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Kagi Assistant.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		4A1BC3485DE54C34B10CFCA4 /* message.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = "Kagi Assistant/message.css"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -33,6 +38,7 @@
 			isa = PBXGroup;
 			children = (
 				1AB70C892F70B09A00B0D8B8 /* Kagi Assistant */,
+				4A1BC3485DE54C34B10CFCA4 /* message.css */,
 				1AB70C882F70B09A00B0D8B8 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -109,6 +115,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				29D8C632C4B544AD90B64148 /* message.css in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
