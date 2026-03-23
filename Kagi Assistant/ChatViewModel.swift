@@ -9,7 +9,16 @@ import SwiftUI
 final class ChatViewModel {
     var threads: [ChatThread] = []
     var selectedThreadID: UUID? {
-        didSet { removeEmptyThread(id: oldValue) }
+        didSet {
+            removeEmptyThread(id: oldValue)
+            // Persist the kagi thread ID so we can restore it on next launch
+            if let selectedThreadID,
+               let thread = threads.first(where: { $0.id == selectedThreadID }) {
+                UserDefaults.standard.set(thread.kagiThreadId, forKey: "lastThreadKagiId")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "lastThreadKagiId")
+            }
+        }
     }
     var isAuthenticated = false
     var isLoading = false
@@ -187,10 +196,25 @@ final class ChatViewModel {
 
         await MainActor.run {
             self.threads = localOnly + remoteThreads
-            // Keep selection if still valid, otherwise select first
-            if let selected = selectedThreadID, !threads.contains(where: { $0.id == selected }) {
-                selectedThreadID = threads.first?.id
+
+            // Restore last selected thread, or create a new chat
+            if selectedThreadID == nil || !threads.contains(where: { $0.id == selectedThreadID }) {
+                if let lastKagiId = UserDefaults.standard.string(forKey: "lastThreadKagiId"),
+                   let restored = threads.first(where: { $0.kagiThreadId == lastKagiId }) {
+                    selectedThreadID = restored.id
+                } else if threads.isEmpty {
+                    createThread()
+                } else {
+                    selectedThreadID = threads.first?.id
+                }
             }
+        }
+
+        // Load messages for the restored thread if needed
+        if let id = await MainActor.run(body: { selectedThreadID }),
+           let thread = await MainActor.run(body: { threads.first(where: { $0.id == id }) }),
+           thread.kagiThreadId != nil, thread.messages.isEmpty {
+            await selectThread(thread)
         }
     }
 
@@ -317,7 +341,12 @@ final class ChatViewModel {
                            let info = try? JSONDecoder().decode(KagiThreadInfo.self, from: data) {
                             await MainActor.run {
                                 if let idx = self.threads.firstIndex(where: { $0.id == threadUUID }) {
-                                    if let tid = info.id { self.threads[idx].kagiThreadId = tid }
+                                    if let tid = info.id {
+                                        self.threads[idx].kagiThreadId = tid
+                                        if self.threads[idx].id == self.selectedThreadID {
+                                            UserDefaults.standard.set(tid, forKey: "lastThreadKagiId")
+                                        }
+                                    }
                                     if let title = info.title, !title.isEmpty { self.threads[idx].name = title }
                                 }
                             }
