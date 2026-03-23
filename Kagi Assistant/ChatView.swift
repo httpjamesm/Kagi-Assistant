@@ -284,13 +284,7 @@ struct MessageBubble: View {
                 Text("You")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text(message.content)
-                    .textSelection(.enabled)
-                    .padding(10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.accentColor.opacity(0.15))
-                    )
+                UserMessageContent(content: message.content)
             }
         }
     }
@@ -318,6 +312,45 @@ struct MessageBubble: View {
                     .padding(.top, 4)
             }
         }
+    }
+}
+
+// MARK: - User Message Content
+
+private struct UserMessageContent: View {
+    let content: String
+    @State private var isExpanded = false
+
+    private let characterLimit = 500
+
+    private var isTruncated: Bool { content.count > characterLimit }
+
+    private var displayedText: String {
+        if isTruncated && !isExpanded {
+            return String(content.prefix(characterLimit)) + "..."
+        }
+        return content
+    }
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            Text(displayedText)
+                .textSelection(.enabled)
+
+            if isTruncated {
+                Button(isExpanded ? "Read Less" : "Read More") {
+                    isExpanded.toggle()
+                }
+                .font(.caption)
+                .buttonStyle(.plain)
+                .foregroundColor(.accentColor)
+            }
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.accentColor.opacity(0.15))
+        )
     }
 }
 
