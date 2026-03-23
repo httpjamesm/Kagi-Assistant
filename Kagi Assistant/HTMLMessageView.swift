@@ -8,7 +8,6 @@ import WebKit
 
 private class NonScrollableWebView: WKWebView {
     override func scrollWheel(with event: NSEvent) {
-        // Forward scroll events to the parent (SwiftUI ScrollView)
         nextResponder?.scrollWheel(with: event)
     }
 }
@@ -30,21 +29,23 @@ struct HTMLMessageView: NSViewRepresentable {
         webView.setValue(false, forKey: "drawsBackground")
 
         context.coordinator.webView = webView
-        loadHTML(in: webView)
+
+        // Load the shell page once; content will be injected via JS
+        let shell = Self.shellHTML()
+        webView.loadHTMLString(shell, baseURL: nil)
+
         return webView
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
+        print("[HTMLMessageView] updateNSView called, html length: \(html.count)")
         context.coordinator.parent = self
-        loadHTML(in: webView)
+        context.coordinator.updateContent(html)
     }
 
-    private func loadHTML(in webView: WKWebView) {
-        let wrapped = Self.wrapHTML(html)
-        webView.loadHTMLString(wrapped, baseURL: nil)
-    }
-
-    static func wrapHTML(_ body: String) -> String {
+    /// The page shell — loaded once. Contains styles, the height observer,
+    /// and a `setContent()` JS function for incremental updates.
+    static func shellHTML() -> String {
         """
         <!DOCTYPE html>
         <html>
@@ -137,7 +138,7 @@ struct HTMLMessageView: NSViewRepresentable {
         </style>
         </head>
         <body>
-        \(body)
+        <div id="content"></div>
         <script>
             function notifyHeight() {
                 const h = document.body.scrollHeight;
@@ -146,7 +147,11 @@ struct HTMLMessageView: NSViewRepresentable {
             const observer = new MutationObserver(notifyHeight);
             observer.observe(document.body, { childList: true, subtree: true, characterData: true });
             window.addEventListener('load', notifyHeight);
-            notifyHeight();
+
+            function setContent(html) {
+                document.getElementById('content').innerHTML = html;
+                notifyHeight();
+            }
         </script>
         </body>
         </html>
@@ -155,9 +160,11 @@ struct HTMLMessageView: NSViewRepresentable {
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var parent: HTMLMessageView
+        private var pageReady = false
+        private var pendingHTML: String?
+
         weak var webView: WKWebView? {
             didSet {
-                // Register JS message handler for height changes
                 webView?.configuration.userContentController.add(self, name: "heightChanged")
             }
         }
@@ -170,6 +177,52 @@ struct HTMLMessageView: NSViewRepresentable {
             webView?.configuration.userContentController.removeScriptMessageHandler(forName: "heightChanged")
         }
 
+        func updateContent(_ html: String) {
+            print("[HTMLMessageView] updateContent called, pageReady: \(pageReady), html length: \(html.count)")
+            if pageReady {
+                injectHTML(html)
+            } else {
+                pendingHTML = html
+            }
+        }
+
+        private func injectHTML(_ html: String) {
+            print("[HTMLMessageView] injectHTML called, html length: \(html.count)")
+            guard let webView else {
+                print("[HTMLMessageView] injectHTML — webView is nil!")
+                return
+            }
+            // Escape for JS string literal
+            let escaped = html
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "`", with: "\\`")
+                .replacingOccurrences(of: "${", with: "\\${")
+            webView.evaluateJavaScript("setContent(`\(escaped)`)") { _, _ in }
+        }
+
+        // MARK: - WKNavigationDelegate
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            print("[HTMLMessageView] didFinish — page is now ready")
+            pageReady = true
+            // Inject any content that arrived before the page was ready
+            if let pending = pendingHTML {
+                pendingHTML = nil
+                injectHTML(pending)
+            } else {
+                injectHTML(parent.html)
+            }
+        }
+
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            if navigationAction.navigationType == .linkActivated, let url = navigationAction.request.url {
+                NSWorkspace.shared.open(url)
+                decisionHandler(.cancel)
+            } else {
+                decisionHandler(.allow)
+            }
+        }
+
         // MARK: - WKScriptMessageHandler
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -178,29 +231,6 @@ struct HTMLMessageView: NSViewRepresentable {
                   height > 0 else { return }
             DispatchQueue.main.async {
                 self.parent.dynamicHeight = height
-            }
-        }
-
-        // MARK: - WKNavigationDelegate
-
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            // Query final height after page load
-            webView.evaluateJavaScript("document.body.scrollHeight") { [weak self] result, _ in
-                if let height = result as? CGFloat, height > 0 {
-                    DispatchQueue.main.async {
-                        self?.parent.dynamicHeight = height
-                    }
-                }
-            }
-        }
-
-        // Open links in default browser instead of in the webview
-        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            if navigationAction.navigationType == .linkActivated, let url = navigationAction.request.url {
-                NSWorkspace.shared.open(url)
-                decisionHandler(.cancel)
-            } else {
-                decisionHandler(.allow)
             }
         }
     }

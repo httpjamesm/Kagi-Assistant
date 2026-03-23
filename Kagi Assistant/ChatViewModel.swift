@@ -295,8 +295,6 @@ final class ChatViewModel {
 
                 for try await chunk in stream {
                     guard !Task.isCancelled else { break }
-                    
-                    print(chunk)
 
                     switch chunk.header {
                     case "hi":
@@ -329,7 +327,7 @@ final class ChatViewModel {
                     case "tokens.json":
                         if let data = chunk.data.data(using: .utf8),
                            let tokens = try? JSONDecoder().decode(KagiTokensPayload.self, from: data) {
-                            accumulatedText = tokens.text
+                            accumulatedText = tokens.content
                             let text = accumulatedText
                             await MainActor.run {
                                 self.updateStreamingMessage(threadUUID: threadUUID, messageId: assistantMsgId, content: text)
@@ -418,6 +416,7 @@ final class ChatViewModel {
         if let idx = threads.firstIndex(where: { $0.id == threadUUID }),
            let msgIdx = threads[idx].messages.firstIndex(where: { $0.id == messageId }) {
             threads[idx].messages[msgIdx].content = content
+            print("[ViewModel] updateStreamingMessage — content length: \(content.count)")
         }
     }
 

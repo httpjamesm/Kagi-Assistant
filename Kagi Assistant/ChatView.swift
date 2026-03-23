@@ -44,7 +44,7 @@ struct ChatView: View {
     private func messageList(for thread: ChatThread) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 12) {
                     ForEach(thread.messages) { message in
                         MessageBubble(message: message)
                             .id(message.id)

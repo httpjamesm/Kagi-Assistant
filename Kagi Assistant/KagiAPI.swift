@@ -52,8 +52,9 @@ struct KagiLocationInfo: Decodable {
 struct KagiTokensPayload: Decodable {
     let token: String?
     let tokens: String?
+    let text: String?
 
-    var text: String { token ?? tokens ?? "" }
+    var content: String { text ?? token ?? tokens ?? "" }
 }
 
 struct KagiMessageDTO: Decodable {
