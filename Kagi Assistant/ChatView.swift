@@ -301,8 +301,10 @@ struct MessageBubble: View {
                 switch segment {
                 case .htmlContent(_, let html):
                     SegmentHTMLView(html: html)
+                        .padding(.top, 4)
                 case .event(_, let title, let content, let isCompleted):
                     EventView(title: title, content: content, isCompleted: isCompleted)
+                        .padding(.top, 4)
                 }
             }
 
@@ -312,16 +314,8 @@ struct MessageBubble: View {
             }
 
             if !message.citations.isEmpty {
-                Divider()
-                ForEach(Array(message.citations.enumerated()), id: \.offset) { idx, citation in
-                    HStack(spacing: 4) {
-                        Text("\(idx + 1).")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        Link(citation.title, destination: URL(string: citation.url) ?? URL(string: "about:blank")!)
-                            .font(.caption)
-                    }
-                }
+                SourcesButton(citations: message.citations)
+                    .padding(.top, 4)
             }
         }
     }

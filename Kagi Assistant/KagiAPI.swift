@@ -493,21 +493,48 @@ actor KagiAPIClient {
     }
 }
 
+// MARK: - HTML Helpers
+
+private extension String {
+    func decodingHTMLEntities() -> String {
+        var result = self
+        for (entity, char) in [
+            ("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"),
+            ("&quot;", "\""), ("&#39;", "'"), ("&#x27;", "'"),
+            ("&apos;", "'"), ("&#x2F;", "/"), ("&#47;", "/"),
+        ] {
+            result = result.replacingOccurrences(of: entity, with: char)
+        }
+        return result
+    }
+}
+
 // MARK: - Citation Parsing
 
 extension KagiMessageDTO {
     func extractCitations() -> [KagiCitation] {
         guard let html = references_html, !html.isEmpty else { return [] }
-        var citations: [KagiCitation] = []
 
-        // Simple regex-based extraction for <a href="...">title</a> within ol[data-ref-list]
-        let pattern = #"<a\s+href="([^"]+)"[^>]*>([^<]+)</a>"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
-        let range = NSRange(html.startIndex..., in: html)
-        for match in regex.matches(in: html, range: range) {
-            if let urlRange = Range(match.range(at: 1), in: html),
-               let titleRange = Range(match.range(at: 2), in: html) {
-                citations.append(KagiCitation(url: String(html[urlRange]), title: String(html[titleRange])))
+        // Narrow to the <ol data-ref-list> block, matching the server's reference list structure
+        let olPattern = #"<ol[^>]*\bdata-ref-list\b[^>]*>(.*?)</ol>"#
+        guard let olRegex = try? NSRegularExpression(pattern: olPattern, options: .dotMatchesLineSeparators),
+              let olMatch = olRegex.firstMatch(in: html, range: NSRange(html.startIndex..., in: html)),
+              let olRange = Range(olMatch.range(at: 1), in: html) else {
+            return []
+        }
+        let olContent = String(html[olRange])
+
+        // Extract <a href="...">title</a> from each <li>
+        var citations: [KagiCitation] = []
+        let linkPattern = #"<li[^>]*>\s*<a\s+href="([^"]+)"[^>]*>([^<]+)</a>"#
+        guard let linkRegex = try? NSRegularExpression(pattern: linkPattern, options: .dotMatchesLineSeparators) else { return [] }
+        let range = NSRange(olContent.startIndex..., in: olContent)
+        for match in linkRegex.matches(in: olContent, range: range) {
+            if let urlRange = Range(match.range(at: 1), in: olContent),
+               let titleRange = Range(match.range(at: 2), in: olContent) {
+                let url = String(olContent[urlRange]).decodingHTMLEntities()
+                let title = String(olContent[titleRange]).decodingHTMLEntities()
+                citations.append(KagiCitation(url: url, title: title))
             }
         }
         return citations
