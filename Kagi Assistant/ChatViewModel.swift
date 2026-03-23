@@ -17,6 +17,7 @@ final class ChatViewModel {
     var userEmail: String?
     var profiles: [KagiProfile] = []
     var selectedModel: String = "gemini-3-1-flash-lite"
+    var internetAccess: Bool = true
     var currentTraceId: String?
 
     private let api = KagiAPIClient.shared
@@ -270,6 +271,7 @@ final class ChatViewModel {
         let threadId = threads[index].kagiThreadId
         let branchId = threads[index].branchId
         let model = selectedModel
+        let internet = internetAccess
         let threadUUID = threads[index].id
 
         // Add placeholder assistant message
@@ -290,7 +292,8 @@ final class ChatViewModel {
                     prompt: content,
                     threadId: threadId,
                     branchId: branchId,
-                    model: model
+                    model: model,
+                    internetAccess: internet
                 )
 
                 for try await chunk in stream {

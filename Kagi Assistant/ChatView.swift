@@ -69,6 +69,16 @@ struct ChatView: View {
 
     private var inputArea: some View {
         HStack(alignment: .bottom, spacing: 8) {
+            Button {
+                viewModel.internetAccess.toggle()
+            } label: {
+                Image(systemName: viewModel.internetAccess ? "network" : "network.slash")
+                    .font(.title2)
+                    .foregroundStyle(viewModel.internetAccess ? .primary : .secondary)
+            }
+            .buttonStyle(.plain)
+            .help(viewModel.internetAccess ? "Internet access enabled" : "Internet access disabled")
+
             AutoResizingTextView(
                 text: $messageText,
                 desiredHeight: $textEditorHeight,

@@ -250,11 +250,12 @@ actor KagiAPIClient {
         threadId: String? = nil,
         branchId: String? = nil,
         model: String = "claude-3-5-sonnet",
-        profileId: String? = nil
+        profileId: String? = nil,
+        internetAccess: Bool = true
     ) -> AsyncThrowingStream<StreamChunk, Error> {
         let body = KagiPromptRequest(
             focus: .init(thread_id: threadId, prompt: prompt, branch_id: branchId),
-            profile: .init(id: profileId, model: model),
+            profile: .init(id: profileId, internet_access: internetAccess, model: model),
             threads: [.init()]
         )
         return streamRequest(path: "assistant/prompt", body: body)
