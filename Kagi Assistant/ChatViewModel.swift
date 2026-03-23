@@ -196,7 +196,7 @@ final class ChatViewModel {
                 if let prompt = dto.prompt, !prompt.isEmpty {
                     messages.append(ChatMessage(role: .user, content: prompt))
                 }
-                let content = dto.md ?? dto.reply ?? ""
+                let content = dto.reply ?? ""
                 if !content.isEmpty {
                     messages.append(ChatMessage(
                         role: .assistant,
@@ -333,7 +333,7 @@ final class ChatViewModel {
                     case "new_message.json":
                         if let data = chunk.data.data(using: .utf8),
                            let msg = try? JSONDecoder().decode(KagiMessageDTO.self, from: data) {
-                            let finalContent = msg.md ?? msg.reply ?? accumulatedText
+                            let finalContent = msg.reply ?? accumulatedText
                             let citations = msg.extractCitations()
                             let kagiMsgId = msg.id
                             await MainActor.run {

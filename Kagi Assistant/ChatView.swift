@@ -248,48 +248,60 @@ struct AutoResizingTextView: NSViewRepresentable {
 
 struct MessageBubble: View {
     let message: ChatMessage
+    @State private var webViewHeight: CGFloat = 1
 
     private var isUser: Bool { message.role == .user }
 
     var body: some View {
-        HStack {
-            if isUser { Spacer(minLength: 60) }
+        if isUser {
+            userBubble
+        } else {
+            assistantView
+        }
+    }
 
-            VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
-                Text(isUser ? "You" : "Assistant")
+    private var userBubble: some View {
+        HStack {
+            Spacer(minLength: 60)
+            VStack(alignment: .trailing, spacing: 4) {
+                Text("You")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Text(message.content)
+                    .textSelection(.enabled)
+                    .padding(10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.accentColor.opacity(0.15))
+                    )
+            }
+        }
+    }
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(message.content)
-                        .textSelection(.enabled)
-
-                    if message.isStreaming {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
-
-                    if !message.citations.isEmpty {
-                        Divider()
-                        ForEach(Array(message.citations.enumerated()), id: \.offset) { idx, citation in
-                            HStack(spacing: 4) {
-                                Text("\(idx + 1).")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                Link(citation.title, destination: URL(string: citation.url) ?? URL(string: "about:blank")!)
-                                    .font(.caption)
-                            }
-                        }
-                    }
-                }
-                .padding(10)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(isUser ? Color.accentColor.opacity(0.15) : Color.secondary.opacity(0.1))
-                )
+    private var assistantView: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if !message.content.isEmpty {
+                HTMLMessageView(html: message.content, dynamicHeight: $webViewHeight)
+                    .frame(height: webViewHeight)
             }
 
-            if !isUser { Spacer(minLength: 60) }
+            if message.isStreaming {
+                ProgressView()
+                    .controlSize(.small)
+            }
+
+            if !message.citations.isEmpty {
+                Divider()
+                ForEach(Array(message.citations.enumerated()), id: \.offset) { idx, citation in
+                    HStack(spacing: 4) {
+                        Text("\(idx + 1).")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Link(citation.title, destination: URL(string: citation.url) ?? URL(string: "about:blank")!)
+                            .font(.caption)
+                    }
+                }
+            }
         }
     }
 }
