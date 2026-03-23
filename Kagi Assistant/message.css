@@ -109,6 +109,7 @@ span.citation {
 details, summary {
     display: none;
 }
+/* Events are rendered natively by EventView — hide any stray details in HTML segments */
 .references {
     display: none;
 }

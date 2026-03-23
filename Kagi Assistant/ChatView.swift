@@ -255,6 +255,10 @@ struct MessageBubble: View {
 
     private var isUser: Bool { message.role == .user }
 
+    private var segments: [ContentSegment] {
+        ContentParser.parseContent(message.content, isStreaming: message.isStreaming)
+    }
+
     var body: some View {
         if isUser {
             userBubble
@@ -283,12 +287,16 @@ struct MessageBubble: View {
 
     private var assistantView: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if !message.content.isEmpty {
-                HTMLMessageView(html: message.content, dynamicHeight: $webViewHeight)
-                    .frame(height: webViewHeight)
+            ForEach(segments) { segment in
+                switch segment {
+                case .htmlContent(_, let html):
+                    SegmentHTMLView(html: html)
+                case .event(_, let title, let content, let isCompleted):
+                    EventView(title: title, content: content, isCompleted: isCompleted)
+                }
             }
 
-            if message.isStreaming {
+            if message.isStreaming && segments.isEmpty {
                 ProgressView()
                     .controlSize(.small)
             }
@@ -306,6 +314,17 @@ struct MessageBubble: View {
                 }
             }
         }
+    }
+}
+
+/// Wrapper that gives each HTML segment its own height state.
+private struct SegmentHTMLView: View {
+    let html: String
+    @State private var height: CGFloat = 1
+
+    var body: some View {
+        HTMLMessageView(html: html, dynamicHeight: $height)
+            .frame(height: height)
     }
 }
 
