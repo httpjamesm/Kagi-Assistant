@@ -56,6 +56,11 @@ struct ChatView: View {
                     }
                 }
             }
+            .onChange(of: thread.messages.last?.content) {
+                if let lastMessage = thread.messages.last {
+                    proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                }
+            }
         }
     }
 
@@ -65,7 +70,7 @@ struct ChatView: View {
                 text: $messageText,
                 desiredHeight: $textEditorHeight,
                 maxLines: 10,
-                placeholder: "Type a message..."
+                placeholder: viewModel.isAuthenticated ? "Type a message..." : "Log in to start chatting..."
             )
             .frame(height: textEditorHeight)
             .overlay(
@@ -74,15 +79,27 @@ struct ChatView: View {
             )
             .clipShape(RoundedRectangle(cornerRadius: 8))
 
-            Button {
-                send()
-            } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.title2)
+            if viewModel.isStreaming {
+                Button {
+                    viewModel.stopGeneration()
+                } label: {
+                    Image(systemName: "stop.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.red)
+                }
+                .buttonStyle(.plain)
+                .help("Stop generation")
+            } else {
+                Button {
+                    send()
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.title2)
+                }
+                .buttonStyle(.plain)
+                .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .keyboardShortcut(.return, modifiers: .command)
             }
-            .buttonStyle(.plain)
-            .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .keyboardShortcut(.return, modifiers: .command)
         }
         .padding(12)
     }
@@ -221,6 +238,7 @@ struct AutoResizingTextView: NSViewRepresentable {
                 placeholderView = field
             }
 
+            placeholderView?.stringValue = parent.placeholder
             placeholderView?.isHidden = !textView.string.isEmpty
         }
     }
@@ -242,13 +260,33 @@ struct MessageBubble: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                Text(message.content)
-                    .padding(10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(isUser ? Color.accentColor.opacity(0.15) : Color.secondary.opacity(0.1))
-                    )
-                    .textSelection(.enabled)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(message.content)
+                        .textSelection(.enabled)
+
+                    if message.isStreaming {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+
+                    if !message.citations.isEmpty {
+                        Divider()
+                        ForEach(Array(message.citations.enumerated()), id: \.offset) { idx, citation in
+                            HStack(spacing: 4) {
+                                Text("\(idx + 1).")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                Link(citation.title, destination: URL(string: citation.url) ?? URL(string: "about:blank")!)
+                                    .font(.caption)
+                            }
+                        }
+                    }
+                }
+                .padding(10)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(isUser ? Color.accentColor.opacity(0.15) : Color.secondary.opacity(0.1))
+                )
             }
 
             if !isUser { Spacer(minLength: 60) }
