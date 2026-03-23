@@ -95,7 +95,7 @@ struct KagiThreadListWrapper: Sendable {
     }
 }
 
-struct KagiProfile: Decodable, Identifiable {
+struct KagiProfile: Codable, Identifiable, Equatable {
     let id: String?
     let model: String?
     let model_provider: String?

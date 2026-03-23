@@ -27,8 +27,17 @@ final class ChatViewModel {
     var sessionToken: String = ""
     var userEmail: String?
     var profiles: [KagiProfile] = []
-    var selectedModel: String = UserDefaults.standard.string(forKey: "selectedModel") ?? "gemini-3-1-flash-lite" {
-        didSet { UserDefaults.standard.set(selectedModel, forKey: "selectedModel") }
+    var selectedProfile: KagiProfile? = {
+        guard let data = UserDefaults.standard.data(forKey: "selectedProfile"),
+              let profile = try? JSONDecoder().decode(KagiProfile.self, from: data)
+        else { return nil }
+        return profile
+    }() {
+        didSet {
+            if let data = try? JSONEncoder().encode(selectedProfile) {
+                UserDefaults.standard.set(data, forKey: "selectedProfile")
+            }
+        }
     }
     var internetAccess: Bool = UserDefaults.standard.object(forKey: "internetAccess") as? Bool ?? true {
         didSet { UserDefaults.standard.set(internetAccess, forKey: "internetAccess") }
@@ -133,7 +142,12 @@ final class ChatViewModel {
             return (a.name ?? "") < (b.name ?? "")
         }
 
-        await MainActor.run { self.profiles = foundProfiles }
+        await MainActor.run {
+            self.profiles = foundProfiles
+            if self.selectedProfile == nil, let first = foundProfiles.first {
+                self.selectedProfile = first
+            }
+        }
     }
 
     // MARK: - Thread Management
@@ -300,7 +314,9 @@ final class ChatViewModel {
         // Start streaming response
         let threadId = threads[index].kagiThreadId
         let branchId = threads[index].branchId
-        let model = selectedModel
+        let profile = selectedProfile
+        let model = profile?.model ?? profile?.name ?? "gemini-3-1-flash-lite"
+        let profileId = profile?.id
         let internet = internetAccess
         let threadUUID = threads[index].id
 
@@ -323,6 +339,7 @@ final class ChatViewModel {
                     threadId: threadId,
                     branchId: branchId,
                     model: model,
+                    profileId: profileId,
                     internetAccess: internet
                 )
 
