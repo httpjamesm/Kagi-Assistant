@@ -6,10 +6,10 @@
 import Foundation
 
 enum ContentSegment: Identifiable, Equatable {
-    case htmlContent(id: UUID = UUID(), html: String)
-    case event(id: UUID = UUID(), title: String, content: String, isCompleted: Bool)
+    case htmlContent(id: Int, html: String)
+    case event(id: Int, title: String, content: String, isCompleted: Bool)
 
-    var id: UUID {
+    var id: Int {
         switch self {
         case .htmlContent(let id, _): return id
         case .event(let id, _, _, _): return id
@@ -35,11 +35,12 @@ enum ContentParser {
         guard !matches.isEmpty else {
             let trimmed = html.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty { return [] }
-            return [.htmlContent(html: html)]
+            return [.htmlContent(id: 0, html: html)]
         }
 
         var segments: [ContentSegment] = []
         var cursor = 0
+        var nextId = 0
 
         for (i, match) in matches.enumerated() {
             // Content before this <details> block
@@ -47,7 +48,8 @@ enum ContentParser {
                 let preceding = nsHTML.substring(with: NSRange(location: cursor, length: match.range.location - cursor))
                 let trimmed = preceding.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !trimmed.isEmpty {
-                    segments.append(.htmlContent(html: preceding))
+                    segments.append(.htmlContent(id: nextId, html: preceding))
+                    nextId += 1
                 }
             }
 
@@ -68,7 +70,8 @@ enum ContentParser {
 
             let completed = !isLast || hasContentAfter || !isStreaming
 
-            segments.append(.event(title: title, content: content, isCompleted: completed))
+            segments.append(.event(id: nextId, title: title, content: content, isCompleted: completed))
+            nextId += 1
             cursor = match.range.location + match.range.length
         }
 
@@ -77,7 +80,7 @@ enum ContentParser {
             let remaining = nsHTML.substring(from: cursor)
             let trimmed = remaining.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty {
-                segments.append(.htmlContent(html: remaining))
+                segments.append(.htmlContent(id: nextId, html: remaining))
             }
         }
 
