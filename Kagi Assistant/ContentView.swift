@@ -10,13 +10,15 @@ import SwiftUI
 struct ContentView: View {
     @State private var viewModel = ChatViewModel()
     @State private var showingLogin = false
+    @State private var searchFocusTrigger = false
+    @State private var showModelPicker = false
 
     var body: some View {
         NavigationSplitView {
-            SidebarView(viewModel: viewModel)
+            SidebarView(viewModel: viewModel, focusSearch: $searchFocusTrigger)
                 .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 320)
         } detail: {
-            ChatView(viewModel: viewModel)
+            ChatView(viewModel: viewModel, showModelPicker: $showModelPicker)
         }
         .frame(minWidth: 600, minHeight: 400)
         .toolbar {
@@ -51,6 +53,20 @@ struct ContentView: View {
             Button("OK") { viewModel.errorMessage = nil }
         } message: {
             Text(viewModel.errorMessage ?? "")
+        }
+        .background {
+            Group {
+                Button(action: { viewModel.createThread() }) { EmptyView() }
+                    .keyboardShortcut("k", modifiers: .command)
+                Button(action: { searchFocusTrigger.toggle() }) { EmptyView() }
+                    .keyboardShortcut("f", modifiers: [.command, .shift])
+                Button(action: { viewModel.internetAccess.toggle() }) { EmptyView() }
+                    .keyboardShortcut("i", modifiers: .command)
+                Button(action: { showModelPicker.toggle() }) { EmptyView() }
+                    .keyboardShortcut("m", modifiers: [.command, .shift])
+            }
+            .opacity(0)
+            .allowsHitTesting(false)
         }
     }
 }

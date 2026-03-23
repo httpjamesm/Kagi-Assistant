@@ -8,7 +8,9 @@ import SwiftUI
 @Observable
 final class ChatViewModel {
     var threads: [ChatThread] = []
-    var selectedThreadID: UUID?
+    var selectedThreadID: UUID? {
+        didSet { removeEmptyThread(id: oldValue) }
+    }
     var isAuthenticated = false
     var isLoading = false
     var isStreaming = false
@@ -410,6 +412,17 @@ final class ChatViewModel {
                 self.isStreaming = false
                 self.currentTraceId = nil
             }
+        }
+    }
+
+    // MARK: - Empty Thread Cleanup
+
+    private func removeEmptyThread(id: UUID?) {
+        guard let id, id != selectedThreadID,
+              let index = threads.firstIndex(where: { $0.id == id }) else { return }
+        let thread = threads[index]
+        if thread.messages.isEmpty && thread.kagiThreadId == nil {
+            threads.remove(at: index)
         }
     }
 

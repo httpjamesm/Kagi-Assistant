@@ -8,6 +8,7 @@ import AppKit
 
 struct ChatView: View {
     @Bindable var viewModel: ChatViewModel
+    @Binding var showModelPicker: Bool
     @State private var messageText = ""
     @State private var textEditorHeight: CGFloat = 32
 
@@ -21,7 +22,7 @@ struct ChatView: View {
             .navigationTitle(thread.name)
             .toolbar {
                 ToolbarItem(placement: .automatic) {
-                    ModelPicker(viewModel: viewModel)
+                    ModelPicker(viewModel: viewModel, showPopover: $showModelPicker)
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
@@ -83,7 +84,8 @@ struct ChatView: View {
                 text: $messageText,
                 desiredHeight: $textEditorHeight,
                 maxLines: 10,
-                placeholder: viewModel.isAuthenticated ? "Type a message..." : "Log in to start chatting..."
+                placeholder: viewModel.isAuthenticated ? "Type a message..." : "Log in to start chatting...",
+                onSend: { send() }
             )
             .frame(height: textEditorHeight)
             .overlay(
@@ -111,13 +113,14 @@ struct ChatView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .keyboardShortcut(.return, modifiers: .command)
             }
         }
         .padding(12)
     }
 
     private func send() {
+        guard !viewModel.isStreaming,
+              !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         let text = messageText
         messageText = ""
         viewModel.sendMessage(text)
@@ -127,6 +130,20 @@ struct ChatView: View {
 // MARK: - Auto-resizing NSTextView wrapper
 
 private class InputTextView: NSTextView {
+    var onSend: (() -> Void)?
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 36 { // Return
+            if event.modifierFlags.contains(.shift) {
+                super.keyDown(with: event)
+            } else {
+                onSend?()
+            }
+            return
+        }
+        super.keyDown(with: event)
+    }
+
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "a" {
             selectAll(nil)
@@ -141,6 +158,7 @@ struct AutoResizingTextView: NSViewRepresentable {
     @Binding var desiredHeight: CGFloat
     var maxLines: Int
     var placeholder: String
+    var onSend: (() -> Void)?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -155,6 +173,7 @@ struct AutoResizingTextView: NSViewRepresentable {
         scrollView.drawsBackground = false
 
         let textView = InputTextView()
+        textView.onSend = onSend
         textView.delegate = context.coordinator
         textView.font = NSFont.preferredFont(forTextStyle: .body)
         textView.textColor = NSColor.labelColor
@@ -185,13 +204,14 @@ struct AutoResizingTextView: NSViewRepresentable {
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        guard let textView = scrollView.documentView as? NSTextView else { return }
+        guard let textView = scrollView.documentView as? InputTextView else { return }
 
         if textView.string != text {
             textView.string = text
             context.coordinator.recalcHeight()
         }
 
+        textView.onSend = onSend
         context.coordinator.parent = self
         context.coordinator.updatePlaceholder()
     }
@@ -369,6 +389,7 @@ private struct SegmentHTMLView: View {
 
 struct ModelPicker: View {
     @Bindable var viewModel: ChatViewModel
+    @Binding var showPopover: Bool
 
     private var selectedProfileName: String {
         if let profile = viewModel.profiles.first(where: { $0.model == viewModel.selectedModel }) {
@@ -403,9 +424,12 @@ struct ModelPicker: View {
         .fixedSize()
         .help("Select model")
         .disabled(viewModel.profiles.isEmpty)
+        .popover(isPresented: $showPopover) {
+            ModelPopoverContent(viewModel: viewModel, showPopover: $showPopover, groups: groupedProviders)
+        }
     }
 
-    private struct ProviderGroup: Identifiable {
+    struct ProviderGroup: Identifiable {
         let provider: String
         let profiles: [KagiProfile]
         var id: String { provider }
@@ -421,5 +445,53 @@ struct ModelPicker: View {
                 if b.provider == "kagi" { return false }
                 return a.provider < b.provider
             }
+    }
+}
+
+private struct ModelPopoverContent: View {
+    var viewModel: ChatViewModel
+    @Binding var showPopover: Bool
+    let groups: [ModelPicker.ProviderGroup]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(groups, id: \.provider) { (group: ModelPicker.ProviderGroup) in
+                ModelPopoverGroupView(group: group, groups: groups, viewModel: viewModel, showPopover: $showPopover)
+            }
+        }
+        .padding()
+        .frame(minWidth: 200)
+    }
+}
+
+private struct ModelPopoverGroupView: View {
+    let group: ModelPicker.ProviderGroup
+    let groups: [ModelPicker.ProviderGroup]
+    var viewModel: ChatViewModel
+    @Binding var showPopover: Bool
+
+    var body: some View {
+        Text(group.provider.uppercased())
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        ForEach(group.profiles, id: \.stableId) { profile in
+            Button {
+                viewModel.selectedModel = profile.model ?? ""
+                showPopover = false
+            } label: {
+                HStack {
+                    Text(profile.name ?? profile.model ?? "Unknown")
+                    Spacer()
+                    if profile.model == viewModel.selectedModel {
+                        Image(systemName: "checkmark")
+                            .foregroundStyle(Color.accentColor)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+        }
+        if group.provider != groups.last?.provider {
+            Divider()
+        }
     }
 }
