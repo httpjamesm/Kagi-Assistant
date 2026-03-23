@@ -36,6 +36,7 @@
       "size" : "256x256"
     },
     {
+      "filename" : "Kagi-Assistant-iOS-Default-512x512@1x.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "256x256"
@@ -46,6 +47,7 @@
       "size" : "512x512"
     },
     {
+      "filename" : "Kagi-Assistant-iOS-Default-1024x1024@1x.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "512x512"
