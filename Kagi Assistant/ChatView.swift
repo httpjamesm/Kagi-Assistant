@@ -5,6 +5,7 @@
 
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 struct ChatView: View {
     @Bindable var viewModel: ChatViewModel
@@ -78,61 +79,99 @@ struct ChatView: View {
     }
 
     private var inputArea: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            Button {
-                viewModel.internetAccess.toggle()
-            } label: {
-                Image(systemName: viewModel.internetAccess ? "network" : "network.slash")
-                    .font(.title2)
-                    .foregroundStyle(viewModel.internetAccess ? .primary : .secondary)
+        VStack(alignment: .leading, spacing: 8) {
+            if !viewModel.composerAttachments.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(viewModel.composerAttachments) { attachment in
+                            AttachmentChip(attachment: attachment, style: .composer) {
+                                viewModel.removeComposerAttachment(attachment)
+                            }
+                        }
+                    }
+                }
             }
-            .buttonStyle(.plain)
-            .help(viewModel.internetAccess ? "Internet access enabled" : "Internet access disabled")
 
-            AutoResizingTextView(
-                text: $messageText,
-                desiredHeight: $textEditorHeight,
-                maxLines: 10,
-                placeholder: viewModel.isAuthenticated ? "Type a message..." : "Log in to start chatting...",
-                onSend: { send() }
-            )
-            .frame(height: textEditorHeight)
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.primary.opacity(0.15), lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-
-            if viewModel.isStreaming {
+            HStack(alignment: .bottom, spacing: 8) {
                 Button {
-                    viewModel.stopGeneration()
+                    viewModel.internetAccess.toggle()
                 } label: {
-                    Image(systemName: "stop.circle.fill")
+                    Image(systemName: viewModel.internetAccess ? "network" : "network.slash")
                         .font(.title2)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(viewModel.internetAccess ? .primary : .secondary)
                 }
                 .buttonStyle(.plain)
-                .help("Stop generation")
-            } else {
+                .help(viewModel.internetAccess ? "Internet access enabled" : "Internet access disabled")
                 Button {
-                    send()
+                    openAttachmentPicker()
                 } label: {
-                    Image(systemName: "arrow.up.circle.fill")
+                    Image(systemName: "plus.circle")
                         .font(.title2)
                 }
                 .buttonStyle(.plain)
-                .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .help("Attach files")
+                .disabled(viewModel.isStreaming)
+
+                AutoResizingTextView(
+                    text: $messageText,
+                    desiredHeight: $textEditorHeight,
+                    maxLines: 10,
+                    placeholder: viewModel.isAuthenticated ? "Type a message..." : "Log in to start chatting...",
+                    onSend: { send() }
+                )
+                .frame(height: textEditorHeight)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.primary.opacity(0.15), lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                if viewModel.isStreaming {
+                    Button {
+                        viewModel.stopGeneration()
+                    } label: {
+                        Image(systemName: "stop.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(.red)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Stop generation")
+                } else {
+                    Button {
+                        send()
+                    } label: {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.title2)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && viewModel.composerAttachments.isEmpty)
+                }
             }
         }
         .padding(12)
     }
 
     private func send() {
+        let trimmedText = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let attachments = viewModel.composerAttachments
         guard !viewModel.isStreaming,
-              !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+              !trimmedText.isEmpty || !attachments.isEmpty else { return }
         let text = messageText
         messageText = ""
-        viewModel.sendMessage(text)
+        viewModel.clearComposerAttachments()
+        viewModel.sendMessage(text, attachments: attachments)
+    }
+
+    private func openAttachmentPicker() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [.item]
+
+        if panel.runModal() == .OK {
+            viewModel.addAttachments(from: panel.urls)
+        }
     }
 }
 
@@ -313,7 +352,16 @@ struct MessageBubble: View {
                 Text("You")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                UserMessageContent(content: message.content)
+                if !message.content.isEmpty {
+                    UserMessageContent(content: message.content)
+                }
+                if !message.attachments.isEmpty {
+                    VStack(alignment: .trailing, spacing: 6) {
+                        ForEach(message.attachments) { attachment in
+                            AttachmentChip(attachment: attachment, style: .message)
+                        }
+                    }
+                }
             }
         }
     }
@@ -379,6 +427,52 @@ private struct UserMessageContent: View {
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color.accentColor.opacity(0.15))
+        )
+    }
+}
+
+private struct AttachmentChip: View {
+    enum Style {
+        case composer
+        case message
+    }
+
+    let attachment: ChatAttachment
+    let style: Style
+    var onRemove: (() -> Void)? = nil
+
+    private var byteCountText: String? {
+        guard let byteCount = attachment.byteCount else { return nil }
+        return ByteCountFormatter.string(fromByteCount: Int64(byteCount), countStyle: .file)
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "doc")
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(attachment.name)
+                    .lineLimit(1)
+                if let byteCountText {
+                    Text(byteCountText)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if let onRemove {
+                Button(action: onRemove) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .font(style == .composer ? .caption : .callout)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(style == .composer ? Color.secondary.opacity(0.12) : Color.primary.opacity(0.08))
         )
     }
 }

@@ -4,6 +4,8 @@
 //
 
 import SwiftUI
+import ImageIO
+import UniformTypeIdentifiers
 
 @Observable
 final class ChatViewModel {
@@ -42,6 +44,7 @@ final class ChatViewModel {
     var internetAccess: Bool = UserDefaults.standard.object(forKey: "internetAccess") as? Bool ?? true {
         didSet { UserDefaults.standard.set(internetAccess, forKey: "internetAccess") }
     }
+    var composerAttachments: [ChatAttachment] = []
     var currentTraceId: String?
 
     private let api = KagiAPIClient.shared
@@ -244,8 +247,24 @@ final class ChatViewModel {
             let (title, dtos) = try await api.fetchThread(threadId: kagiId)
             var messages: [ChatMessage] = []
             for dto in dtos {
-                if let prompt = dto.prompt, !prompt.isEmpty {
-                    messages.append(ChatMessage(role: .user, content: prompt))
+                let documentAttachments: [ChatAttachment] = dto.documents?.compactMap { document -> ChatAttachment? in
+                    guard let name = document.name, !name.isEmpty else { return nil }
+                    return ChatAttachment(
+                        name: name,
+                        mimeType: document.mime ?? "application/octet-stream",
+                        data: nil,
+                        thumbnailData: nil,
+                        thumbnailMimeType: nil
+                    )
+                } ?? []
+
+                let prompt = dto.prompt ?? ""
+                if !prompt.isEmpty || !documentAttachments.isEmpty {
+                    messages.append(ChatMessage(
+                        role: .user,
+                        content: prompt,
+                        attachments: documentAttachments
+                    ))
                 }
                 let content = dto.reply ?? ""
                 if !content.isEmpty {
@@ -291,18 +310,23 @@ final class ChatViewModel {
 
     // MARK: - Send Message
 
-    func sendMessage(_ content: String) {
-        guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+    func sendMessage(_ content: String, attachments: [ChatAttachment] = []) {
+        let trimmedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedContent.isEmpty || !attachments.isEmpty,
               let index = threads.firstIndex(where: { $0.id == selectedThreadID }) else {
             return
         }
 
-        let userMessage = ChatMessage(role: .user, content: content)
+        let userMessage = ChatMessage(role: .user, content: content, attachments: attachments)
         threads[index].messages.append(userMessage)
 
         // Update thread name from first message
         if threads[index].messages.count == 1 {
-            threads[index].name = String(content.prefix(30))
+            if !trimmedContent.isEmpty {
+                threads[index].name = String(trimmedContent.prefix(30))
+            } else if let firstAttachment = attachments.first {
+                threads[index].name = firstAttachment.name
+            }
         }
 
         guard isAuthenticated else {
@@ -340,7 +364,8 @@ final class ChatViewModel {
                     branchId: branchId,
                     model: model,
                     profileId: profileId,
-                    internetAccess: internet
+                    internetAccess: internet,
+                    attachments: attachments
                 )
 
                 for try await chunk in stream {
@@ -478,6 +503,24 @@ final class ChatViewModel {
 
     // MARK: - Private Helpers
 
+    func addAttachments(from urls: [URL]) {
+        let newAttachments = urls.compactMap(loadAttachment(from:))
+        var seenKeys = Set(composerAttachments.map(attachmentKey(for:)))
+        let uniqueAttachments = newAttachments.filter { attachment in
+            let key = attachmentKey(for: attachment)
+            return seenKeys.insert(key).inserted
+        }
+        composerAttachments.append(contentsOf: uniqueAttachments)
+    }
+
+    func removeComposerAttachment(_ attachment: ChatAttachment) {
+        composerAttachments.removeAll { $0.id == attachment.id }
+    }
+
+    func clearComposerAttachments() {
+        composerAttachments.removeAll()
+    }
+
     private func updateStreamingMessage(threadUUID: UUID, messageId: UUID, content: String) {
         if let idx = threads.firstIndex(where: { $0.id == threadUUID }),
            let msgIdx = threads[idx].messages.firstIndex(where: { $0.id == messageId }) {
@@ -496,5 +539,75 @@ final class ChatViewModel {
         }
         isStreaming = false
         currentTraceId = nil
+    }
+
+    private func loadAttachment(from url: URL) -> ChatAttachment? {
+        let didAccessSecurityScope = url.startAccessingSecurityScopedResource()
+        defer {
+            if didAccessSecurityScope {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        do {
+            let resourceValues = try? url.resourceValues(forKeys: [.contentTypeKey, .nameKey])
+            let contentType = resourceValues?.contentType ?? UTType(filenameExtension: url.pathExtension)
+            let mimeType = resourceValues?.contentType?.preferredMIMEType
+                ?? UTType(filenameExtension: url.pathExtension)?.preferredMIMEType
+                ?? "application/octet-stream"
+            let data = try Data(contentsOf: url)
+            let thumbnail = makeThumbnail(for: data, contentType: contentType, mimeType: mimeType)
+            return ChatAttachment(
+                name: resourceValues?.name ?? url.lastPathComponent,
+                mimeType: mimeType,
+                data: data,
+                thumbnailData: thumbnail?.data,
+                thumbnailMimeType: thumbnail?.mimeType
+            )
+        } catch {
+            errorMessage = "Failed to attach \(url.lastPathComponent): \(error.localizedDescription)"
+            return nil
+        }
+    }
+
+    private func attachmentKey(for attachment: ChatAttachment) -> String {
+        "\(attachment.name)|\(attachment.mimeType)|\(attachment.byteCount ?? 0)"
+    }
+
+    private func makeThumbnail(for data: Data, contentType: UTType?, mimeType: String) -> (data: Data, mimeType: String)? {
+        let isImageType = contentType?.conforms(to: .image) == true || mimeType.hasPrefix("image/")
+        guard isImageType else { return nil }
+
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: 1024
+        ]
+        guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
+        }
+
+        if let webPData = encodeThumbnail(thumbnail, uti: UTType.webP.identifier as CFString) {
+            return (webPData, "image/webp")
+        }
+        if let pngData = encodeThumbnail(thumbnail, uti: UTType.png.identifier as CFString) {
+            return (pngData, "image/png")
+        }
+        return nil
+    }
+
+    private func encodeThumbnail(_ image: CGImage, uti: CFString) -> Data? {
+        let destinationData = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(destinationData, uti, 1, nil) else {
+            return nil
+        }
+
+        let destinationOptions: [CFString: Any] = [
+            kCGImageDestinationLossyCompressionQuality: 0.8
+        ]
+        CGImageDestinationAddImage(destination, image, destinationOptions as CFDictionary)
+        guard CGImageDestinationFinalize(destination) else { return nil }
+        return destinationData as Data
     }
 }

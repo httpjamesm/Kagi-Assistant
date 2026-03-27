@@ -251,14 +251,18 @@ actor KagiAPIClient {
         branchId: String? = nil,
         model: String,
         profileId: String? = nil,
-        internetAccess: Bool = true
+        internetAccess: Bool = true,
+        attachments: [ChatAttachment] = []
     ) -> AsyncThrowingStream<StreamChunk, Error> {
         let body = KagiPromptRequest(
             focus: .init(thread_id: threadId, prompt: prompt, branch_id: branchId),
             profile: .init(id: profileId, internet_access: internetAccess, model: model),
             threads: [.init()]
         )
-        return streamRequest(path: "assistant/prompt", body: body)
+        guard !attachments.isEmpty else {
+            return streamRequest(path: "assistant/prompt", body: body)
+        }
+        return streamMultipartRequest(path: "assistant/prompt", body: body, attachments: attachments)
     }
 
     func regenerateMessage(
@@ -477,6 +481,121 @@ actor KagiAPIClient {
             }
             continuation.onTermination = { _ in task.cancel() }
         }
+    }
+
+    private func streamMultipartRequest<T: Encodable>(
+        path: String,
+        body: T,
+        attachments: [ChatAttachment]
+    ) -> AsyncThrowingStream<StreamChunk, Error> {
+        let request: URLRequest
+        do {
+            let url = baseURL.appendingPathComponent(path)
+            var req = try makeRequest(url: url)
+            let boundary = "Boundary-\(UUID().uuidString)"
+            req.httpMethod = "POST"
+            req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "content-type")
+            req.setValue("application/vnd.kagi.stream", forHTTPHeaderField: "accept")
+            req.timeoutInterval = 0 // unlimited for streams
+            req.httpBody = try makeMultipartBody(state: body, attachments: attachments, boundary: boundary)
+            request = req
+        } catch {
+            return AsyncThrowingStream { $0.finish(throwing: error) }
+        }
+
+        let urlSession = self.session
+        return AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    let (bytes, response) = try await urlSession.bytes(for: request)
+                    guard let httpResponse = response as? HTTPURLResponse,
+                          (200...299).contains(httpResponse.statusCode) else {
+                        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                        continuation.finish(throwing: KagiAPIError.httpError(code))
+                        return
+                    }
+
+                    var buffer = Data()
+                    for try await byte in bytes {
+                        if byte == 0x00 {
+                            if let frame = String(data: buffer, encoding: .utf8), !frame.isEmpty {
+                                let trimmedFrame = frame.trimmingCharacters(in: .whitespacesAndNewlines)
+                                if let colonIndex = trimmedFrame.firstIndex(of: ":") {
+                                    let header = String(trimmedFrame[..<colonIndex])
+                                    let data = String(trimmedFrame[trimmedFrame.index(after: colonIndex)...])
+                                    continuation.yield(StreamChunk(header: header, data: data, done: false))
+                                }
+                            }
+                            buffer.removeAll()
+                        } else {
+                            buffer.append(byte)
+                        }
+                    }
+
+                    if let frame = String(data: buffer, encoding: .utf8), !frame.isEmpty {
+                        let trimmedFrame = frame.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if let colonIndex = trimmedFrame.firstIndex(of: ":") {
+                            let header = String(trimmedFrame[..<colonIndex])
+                            let data = String(trimmedFrame[trimmedFrame.index(after: colonIndex)...])
+                            continuation.yield(StreamChunk(header: header, data: data, done: false))
+                        }
+                    }
+
+                    continuation.yield(StreamChunk(header: "done", data: "", done: true))
+                    continuation.finish()
+                } catch {
+                    if !Task.isCancelled {
+                        continuation.yield(StreamChunk(header: "error", data: error.localizedDescription, done: true))
+                        continuation.finish(throwing: error)
+                    }
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    private func makeMultipartBody<T: Encodable>(
+        state: T,
+        attachments: [ChatAttachment],
+        boundary: String
+    ) throws -> Data {
+        let crlf = "\r\n"
+        var data = Data()
+
+        func append(_ string: String) {
+            data.append(Data(string.utf8))
+        }
+
+        let json = try JSONEncoder().encode(state)
+        append("--\(boundary)\(crlf)")
+        append("Content-Disposition: form-data; name=\"state\"\(crlf)")
+        append("Content-Type: application/json\(crlf)\(crlf)")
+        data.append(json)
+        append(crlf)
+
+        for attachment in attachments {
+            guard let fileData = attachment.data else { continue }
+            let escapedName = attachment.name
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+
+            append("--\(boundary)\(crlf)")
+            append("Content-Disposition: form-data; name=\"file\"; filename=\"\(escapedName)\"\(crlf)")
+            append("Content-Type: \(attachment.mimeType)\(crlf)\(crlf)")
+            data.append(fileData)
+            append(crlf)
+
+            append("--\(boundary)\(crlf)")
+            append("Content-Disposition: form-data; name=\"__kagithumbnail\"; filename=\"blob\"\(crlf)")
+            append("Content-Type: \(attachment.thumbnailMimeType ?? "image/png")\(crlf)\(crlf)")
+            if let thumbnailData = attachment.thumbnailData {
+                data.append(thumbnailData)
+            }
+            append(crlf)
+        }
+
+        append("--\(boundary)--\(crlf)")
+        return data
     }
 
     private func decodeHTMLEntities(_ string: String) -> String {

@@ -52,8 +52,8 @@ struct EventView: View {
 
                 HTMLMessageView(html: content, dynamicHeight: $webViewHeight)
                     .frame(height: webViewHeight)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 4)
             }
         }
         .background(

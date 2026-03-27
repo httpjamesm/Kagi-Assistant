@@ -5,12 +5,26 @@
 
 import Foundation
 
+struct ChatAttachment: Identifiable, Equatable {
+    let id = UUID()
+    let name: String
+    let mimeType: String
+    let data: Data?
+    let thumbnailData: Data?
+    let thumbnailMimeType: String?
+
+    var byteCount: Int? {
+        data?.count
+    }
+}
+
 struct ChatMessage: Identifiable, Equatable {
     let id = UUID()
     var kagiMessageId: String?
     let role: Role
     var content: String
     let timestamp: Date
+    var attachments: [ChatAttachment]
     var citations: [KagiCitation]
     var isStreaming: Bool
 
@@ -19,17 +33,18 @@ struct ChatMessage: Identifiable, Equatable {
         case assistant
     }
 
-    init(role: Role, content: String, timestamp: Date = .now, kagiMessageId: String? = nil, citations: [KagiCitation] = [], isStreaming: Bool = false) {
+    init(role: Role, content: String, timestamp: Date = .now, kagiMessageId: String? = nil, attachments: [ChatAttachment] = [], citations: [KagiCitation] = [], isStreaming: Bool = false) {
         self.role = role
         self.content = content
         self.timestamp = timestamp
         self.kagiMessageId = kagiMessageId
+        self.attachments = attachments
         self.citations = citations
         self.isStreaming = isStreaming
     }
 
     static func == (lhs: ChatMessage, rhs: ChatMessage) -> Bool {
-        lhs.id == rhs.id && lhs.content == rhs.content && lhs.isStreaming == rhs.isStreaming
+        lhs.id == rhs.id && lhs.content == rhs.content && lhs.attachments == rhs.attachments && lhs.isStreaming == rhs.isStreaming
     }
 }
 
