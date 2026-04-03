@@ -18,31 +18,11 @@ struct ContentView: View {
             SidebarView(viewModel: viewModel, focusSearch: $searchFocusTrigger)
                 .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 320)
         } detail: {
-            ChatView(viewModel: viewModel, showModelPicker: $showModelPicker)
+            ChatView(viewModel: viewModel, showModelPicker: $showModelPicker, showingLogin: $showingLogin)
         }
         .frame(minWidth: 600, minHeight: 400)
-        .toolbar {
-            ToolbarItem(placement: .automatic) {
-                if viewModel.isAuthenticated {
-                    Menu {
-                        if let email = viewModel.userEmail {
-                            Text(email)
-                        }
-
-                        Divider()
-                        Button("Sign Out") {
-                            Task { await viewModel.logout() }
-                        }
-                    } label: {
-                        Image(systemName: "person.circle.fill")
-                    }
-                } else {
-                    Button("Sign In") {
-                        showingLogin = true
-                    }
-                }
-            }
-        }
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        .toolbar(removing: .title)
         .sheet(isPresented: $showingLogin) {
             LoginSheet(viewModel: viewModel, isPresented: $showingLogin)
         }

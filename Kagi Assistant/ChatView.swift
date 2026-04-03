@@ -10,9 +10,11 @@ import UniformTypeIdentifiers
 struct ChatView: View {
     @Bindable var viewModel: ChatViewModel
     @Binding var showModelPicker: Bool
+    @Binding var showingLogin: Bool
     @State private var messageText = ""
     @State private var textEditorHeight: CGFloat = 32
     @State private var shouldAutoScroll = true
+    @State private var showAccountPopover = false
     private let chatContentMaxWidth: CGFloat = 750
 
     var body: some View {
@@ -22,20 +24,10 @@ struct ChatView: View {
                 Divider()
                 inputArea
             }
-            .navigationTitle(thread.name)
-            .toolbar {
-                ToolbarItem(placement: .automatic) {
-                    ModelPicker(viewModel: viewModel, showPopover: $showModelPicker)
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        viewModel.createThread()
-                    } label: {
-                        Image(systemName: "square.and.pencil")
-                    }
-                    .help("New Chat")
-                }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                threadHeader(for: thread)
             }
+            .ignoresSafeArea(edges: .top)
         } else {
             ContentUnavailableView(
                 "No Chat Selected",
@@ -81,6 +73,103 @@ struct ChatView: View {
         }
     }
 
+    private func threadHeader(for thread: ChatThread) -> some View {
+        ZStack {
+            Text(thread.name)
+                .font(.headline)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .glassEffect(.regular, in: .capsule)
+
+            HStack {
+                Spacer()
+                headerControls
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .padding(.bottom, 12)
+        .background(.ultraThinMaterial)
+        .mask(
+            LinearGradient(
+                stops: [
+                    .init(color: .white, location: 0),
+                    .init(color: .white, location: 0.6),
+                    .init(color: .clear, location: 1.0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+    }
+
+    private var headerControls: some View {
+        HStack(spacing: 8) {
+            accountControl
+            ModelPicker(viewModel: viewModel, showPopover: $showModelPicker)
+
+            Button {
+                viewModel.createThread()
+            } label: {
+                Image(systemName: "square.and.pencil")
+                    .frame(width: 18, height: 18)
+            }
+            .buttonStyle(.plain)
+            .padding(6)
+            .glassEffect(.regular.interactive(), in: .circle)
+            .help("New Chat")
+        }
+    }
+
+    @ViewBuilder
+    private var accountControl: some View {
+        if viewModel.isAuthenticated {
+            Button {
+                showAccountPopover.toggle()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "person.circle.fill")
+                        .frame(width: 18, height: 18)
+                    Image(systemName: "chevron.down")
+                        .font(.caption2.weight(.semibold))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .glassEffect(.regular.interactive(), in: .capsule)
+            }
+            .buttonStyle(.plain)
+            .help("Account")
+            .popover(isPresented: $showAccountPopover, arrowEdge: .top) {
+                VStack(alignment: .leading, spacing: 12) {
+                    if let email = viewModel.userEmail {
+                        Text(email)
+                            .font(.callout)
+                    }
+
+                    Button("Sign Out") {
+                        showAccountPopover = false
+                        Task { await viewModel.logout() }
+                    }
+                }
+                .padding()
+                .frame(minWidth: 220, alignment: .leading)
+            }
+        } else {
+            Button {
+                showingLogin = true
+            } label: {
+                Image(systemName: "person.crop.circle.badge.plus")
+                    .frame(width: 18, height: 18)
+                    .padding(6)
+                    .glassEffect(.regular.interactive(), in: .circle)
+            }
+            .buttonStyle(.plain)
+            .help("Sign In")
+        }
+    }
+
     private var inputArea: some View {
         VStack(alignment: .leading, spacing: 8) {
             if !viewModel.composerAttachments.isEmpty {
@@ -123,11 +212,7 @@ struct ChatView: View {
                     onSend: { send() }
                 )
                 .frame(height: textEditorHeight)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.primary.opacity(0.15), lineWidth: 1)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 16))
 
                 if viewModel.isStreaming {
                     Button {
@@ -507,28 +592,23 @@ struct ModelPicker: View {
     }
 
     var body: some View {
-        Menu {
-            ForEach(groupedProviders, id: \.provider) { group in
-                Section(group.provider) {
-                    ForEach(group.profiles, id: \.stableId) { profile in
-                        Toggle(isOn: Binding(
-                            get: { viewModel.selectedProfile == profile },
-                            set: { if $0 { viewModel.selectedProfile = profile } }
-                        )) {
-                            Text(profile.name ?? profile.model ?? "Unknown")
-                        }
-                    }
-                }
-            }
+        Button {
+            showPopover.toggle()
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
                 Image(systemName: "cpu")
+                    .frame(width: 14, height: 14)
                 Text(selectedProfileName)
                     .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.semibold))
             }
             .font(.caption)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .glassEffect(.regular.interactive(), in: .capsule)
         }
-        .menuStyle(.borderlessButton)
+        .buttonStyle(.plain)
         .fixedSize()
         .help("Select model")
         .disabled(viewModel.profiles.isEmpty)
