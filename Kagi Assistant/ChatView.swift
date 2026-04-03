@@ -689,15 +689,47 @@ private struct ModelPopoverContent: View {
     var viewModel: ChatViewModel
     @Binding var showPopover: Bool
     let groups: [ModelPicker.ProviderGroup]
+    @State private var searchText = ""
+    @FocusState private var isSearchFocused: Bool
+
+    private var filteredGroups: [ModelPicker.ProviderGroup] {
+        if searchText.isEmpty { return groups }
+        return groups.compactMap { group in
+            let filtered = group.profiles.filter { profile in
+                let name = profile.name ?? profile.model ?? ""
+                return name.localizedCaseInsensitiveContains(searchText)
+            }
+            guard !filtered.isEmpty else { return nil }
+            return ModelPicker.ProviderGroup(provider: group.provider, profiles: filtered)
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(groups, id: \.provider) { (group: ModelPicker.ProviderGroup) in
-                ModelPopoverGroupView(group: group, groups: groups, viewModel: viewModel, showPopover: $showPopover)
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+                TextField("Search models…", text: $searchText)
+                    .textFieldStyle(.plain)
+                    .font(.caption)
+                    .focused($isSearchFocused)
             }
+            .padding(8)
+            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(filteredGroups, id: \.provider) { (group: ModelPicker.ProviderGroup) in
+                        ModelPopoverGroupView(group: group, groups: filteredGroups, viewModel: viewModel, showPopover: $showPopover)
+                    }
+                }
+            }
+            .frame(maxHeight: 300)
         }
         .padding()
         .frame(minWidth: 200)
+        .onAppear { isSearchFocused = true }
     }
 }
 
