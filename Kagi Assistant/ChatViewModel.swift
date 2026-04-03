@@ -29,7 +29,10 @@ final class ChatViewModel {
     var errorMessage: String?
     var sessionToken: String = ""
     var userEmail: String?
-    var profiles: [KagiProfile] = []
+    private var allProfiles: [KagiProfile] = []
+    var profiles: [KagiProfile] {
+        allProfiles.filter { !($0.name ?? "").contains("(reasoning)") }
+    }
     var selectedProfile: KagiProfile? = {
         guard let data = UserDefaults.standard.data(forKey: "selectedProfile"),
               let profile = try? JSONDecoder().decode(KagiProfile.self, from: data)
@@ -40,7 +43,26 @@ final class ChatViewModel {
             if let data = try? JSONEncoder().encode(selectedProfile) {
                 UserDefaults.standard.set(data, forKey: "selectedProfile")
             }
+            thinkingEnabled = false
         }
+    }
+    var thinkingEnabled: Bool = false
+
+    var selectedModelHasThinkingVariant: Bool {
+        guard let name = selectedProfile?.name else { return false }
+        return allProfiles.contains { ($0.name ?? "").contains("(reasoning)") && Self.baseModelName($0.name ?? "") == name }
+    }
+
+    var effectiveProfile: KagiProfile? {
+        guard thinkingEnabled, let name = selectedProfile?.name else { return selectedProfile }
+        return allProfiles.first { ($0.name ?? "").contains("(reasoning)") && Self.baseModelName($0.name ?? "") == name } ?? selectedProfile
+    }
+
+    /// Strips "(reasoning)" (and surrounding whitespace collapse) from a model name.
+    private static func baseModelName(_ name: String) -> String {
+        name.replacingOccurrences(of: "(reasoning)", with: "")
+            .replacingOccurrences(of: "  ", with: " ")
+            .trimmingCharacters(in: .whitespaces)
     }
     var internetAccess: Bool = UserDefaults.standard.object(forKey: "internetAccess") as? Bool ?? true {
         didSet { UserDefaults.standard.set(internetAccess, forKey: "internetAccess") }
@@ -105,7 +127,7 @@ final class ChatViewModel {
             isAuthenticated = false
             sessionToken = ""
             userEmail = nil
-            profiles = []
+            allProfiles = []
             threads = []
             selectedThreadID = nil
             UserDefaults.standard.removeObject(forKey: "kagi_session")
@@ -147,7 +169,7 @@ final class ChatViewModel {
         }
 
         await MainActor.run {
-            self.profiles = foundProfiles
+            self.allProfiles = foundProfiles
             if self.selectedProfile == nil, let first = foundProfiles.first {
                 self.selectedProfile = first
             }
@@ -339,7 +361,7 @@ final class ChatViewModel {
         // Start streaming response
         let threadId = threads[index].kagiThreadId
         let branchId = threads[index].branchId
-        let profile = selectedProfile
+        let profile = effectiveProfile
         let model = profile?.model ?? profile?.name ?? "gemini-3-1-flash-lite"
         let profileId = profile?.id
         let internet = internetAccess

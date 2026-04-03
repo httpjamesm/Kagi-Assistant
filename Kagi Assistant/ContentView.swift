@@ -46,6 +46,12 @@ struct ContentView: View {
                     .keyboardShortcut("i", modifiers: .command)
                 Button(action: { showModelPicker.toggle() }) { EmptyView() }
                     .keyboardShortcut("m", modifiers: [.command, .shift])
+                Button(action: {
+                    if viewModel.selectedModelHasThinkingVariant {
+                        viewModel.thinkingEnabled.toggle()
+                    }
+                }) { EmptyView() }
+                    .keyboardShortcut("t", modifiers: .command)
             }
             .opacity(0)
             .allowsHitTesting(false)

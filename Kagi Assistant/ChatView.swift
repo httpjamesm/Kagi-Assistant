@@ -199,6 +199,19 @@ struct ChatView: View {
                 .padding(6)
                 .glassEffect(.regular.interactive(), in: .circle)
                 .help(viewModel.internetAccess ? "Internet access enabled" : "Internet access disabled")
+                if viewModel.selectedModelHasThinkingVariant {
+                    Button {
+                        viewModel.thinkingEnabled.toggle()
+                    } label: {
+                        Image(systemName: viewModel.thinkingEnabled ? "lightbulb.fill" : "lightbulb")
+                            .frame(width: 18, height: 18)
+                            .foregroundStyle(viewModel.thinkingEnabled ? .yellow : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(6)
+                    .glassEffect(.regular.interactive(), in: .circle)
+                    .help(viewModel.thinkingEnabled ? "Thinking enabled" : "Enable thinking")
+                }
                 Button {
                     openAttachmentPicker()
                 } label: {
