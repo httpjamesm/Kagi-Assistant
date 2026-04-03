@@ -22,13 +22,39 @@ body {
 p { margin-bottom: 0.6em; }
 p:last-child { margin-bottom: 0; }
 pre {
-    background: rgba(128,128,128,0.12);
-    border-radius: 6px;
-    padding: 8px 10px;
+    background: transparent;
+    border-radius: 0;
+    padding: 10px;
     overflow-x: auto;
-    margin: 0.6em 0;
+    margin: 0;
     font-size: 12px;
     line-height: 1.4;
+}
+.code-block {
+    margin: 0.6em 0;
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(128,128,128,0.12);
+    border: 1px solid rgba(128,128,128,0.28);
+}
+.code-block-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 7px 10px;
+    background: ButtonFace;
+    color: ButtonText;
+    border-bottom: 1px solid rgba(128,128,128,0.28);
+}
+.code-block-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+.copyable-pre {
+    position: relative;
 }
 code {
     font-family: "SF Mono", Menlo, monospace;
@@ -38,6 +64,38 @@ code {
     background: rgba(128,128,128,0.12);
     padding: 1px 4px;
     border-radius: 3px;
+}
+.copy-button {
+    appearance: none;
+    border: 0;
+    border-radius: 999px;
+    padding: 3px 8px;
+    font: inherit;
+    font-size: 11px;
+    line-height: 1.2;
+    cursor: pointer;
+    color: ButtonText;
+    background: rgba(128,128,128,0.18);
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+.copy-button:hover {
+    background: rgba(128,128,128,0.28);
+}
+.copy-button[data-copied="true"] {
+    background: rgba(52, 199, 89, 0.22);
+}
+.inline-code-copy {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 100%;
+    vertical-align: middle;
+}
+.inline-code-copy > code {
+    overflow-wrap: anywhere;
+}
+.inline-code-copy > .copy-button {
+    flex: 0 0 auto;
 }
 a {
     color: -apple-system-blue;
