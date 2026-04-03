@@ -92,6 +92,12 @@ private struct ModelPopoverContent: View {
                     .textFieldStyle(.plain)
                     .font(.caption)
                     .focused($isSearchFocused)
+                    .onSubmit {
+                        if let first = filteredGroups.first?.profiles.first {
+                            viewModel.selectedProfile = first
+                            showPopover = false
+                        }
+                    }
             }
             .padding(8)
             .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
