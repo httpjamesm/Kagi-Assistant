@@ -38,6 +38,8 @@ struct ContentView: View {
             Group {
                 Button(action: { viewModel.createThread() }) { EmptyView() }
                     .keyboardShortcut("k", modifiers: .command)
+                Button(action: { viewModel.createThread() }) { EmptyView() }
+                    .keyboardShortcut("n", modifiers: .command)
                 Button(action: { searchFocusTrigger.toggle() }) { EmptyView() }
                     .keyboardShortcut("f", modifiers: [.command, .shift])
                 Button(action: { viewModel.internetAccess.toggle() }) { EmptyView() }
