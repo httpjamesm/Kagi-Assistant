@@ -19,14 +19,13 @@ struct ChatView: View {
 
     var body: some View {
         if let thread = viewModel.selectedThread {
-            VStack(spacing: 0) {
-                messageList(for: thread)
-                Divider()
-                inputArea
-            }
-            .safeAreaInset(edge: .top, spacing: 0) {
-                threadHeader(for: thread)
-            }
+            messageList(for: thread)
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    threadHeader(for: thread)
+                }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    inputArea
+                }
             .ignoresSafeArea(edges: .top)
         } else {
             ContentUnavailableView(
@@ -189,18 +188,22 @@ struct ChatView: View {
                     viewModel.internetAccess.toggle()
                 } label: {
                     Image(systemName: viewModel.internetAccess ? "network" : "network.slash")
-                        .font(.title2)
+                        .frame(width: 18, height: 18)
                         .foregroundStyle(viewModel.internetAccess ? .primary : .secondary)
                 }
                 .buttonStyle(.plain)
+                .padding(6)
+                .glassEffect(.regular.interactive(), in: .circle)
                 .help(viewModel.internetAccess ? "Internet access enabled" : "Internet access disabled")
                 Button {
                     openAttachmentPicker()
                 } label: {
                     Image(systemName: "plus.circle")
-                        .font(.title2)
+                        .frame(width: 18, height: 18)
                 }
                 .buttonStyle(.plain)
+                .padding(6)
+                .glassEffect(.regular.interactive(), in: .circle)
                 .help("Attach files")
                 .disabled(viewModel.isStreaming)
 
@@ -218,27 +221,62 @@ struct ChatView: View {
                     Button {
                         viewModel.stopGeneration()
                     } label: {
-                        Image(systemName: "stop.circle.fill")
-                            .font(.title2)
+                        Image(systemName: "stop.fill")
+                            .frame(width: 18, height: 18)
                             .foregroundStyle(.red)
                     }
                     .buttonStyle(.plain)
+                    .padding(6)
+                    .glassEffect(.regular.interactive(), in: .circle)
                     .help("Stop generation")
                 } else {
-                    Button {
-                        send()
-                    } label: {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.title2)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && viewModel.composerAttachments.isEmpty)
+                    sendButton
                 }
             }
         }
         .padding(12)
+        .padding(.top, 12)
         .frame(maxWidth: chatContentMaxWidth, alignment: .leading)
         .frame(maxWidth: .infinity, alignment: .center)
+        .background(.ultraThinMaterial)
+        .mask(
+            LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0),
+                    .init(color: .white, location: 0.4),
+                    .init(color: .white, location: 1.0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+    }
+
+    private var canSend: Bool {
+        !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !viewModel.composerAttachments.isEmpty
+    }
+
+    @ViewBuilder
+    private var sendButton: some View {
+        let button = Button {
+            send()
+        } label: {
+            Image(systemName: "arrow.up")
+                .fontWeight(.semibold)
+                .frame(width: 18, height: 18)
+                .foregroundStyle(canSend ? .white : .primary)
+        }
+        .buttonStyle(.plain)
+        .padding(6)
+        .disabled(!canSend)
+
+        if canSend {
+            button
+                .glassEffect(.regular.interactive().tint(.accentColor), in: .circle)
+        } else {
+            button
+                .glassEffect(.regular.interactive(), in: .circle)
+        }
     }
 
     private func send() {
