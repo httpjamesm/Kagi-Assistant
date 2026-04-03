@@ -13,6 +13,7 @@ struct ChatView: View {
     @State private var messageText = ""
     @State private var textEditorHeight: CGFloat = 32
     @State private var shouldAutoScroll = true
+    private let chatContentMaxWidth: CGFloat = 750
 
     var body: some View {
         if let thread = viewModel.selectedThread {
@@ -57,6 +58,8 @@ struct ChatView: View {
                         .id("bottom")
                 }
                 .padding()
+                .frame(maxWidth: chatContentMaxWidth, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .center)
             }
             .onScrollGeometryChange(for: Bool.self) { geo in
                 geo.contentOffset.y + geo.containerSize.height >= geo.contentSize.height - 20
@@ -149,6 +152,8 @@ struct ChatView: View {
             }
         }
         .padding(12)
+        .frame(maxWidth: chatContentMaxWidth, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     private func send() {
