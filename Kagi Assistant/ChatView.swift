@@ -552,10 +552,7 @@ private struct UserMessageContent: View {
             }
         }
         .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.accentColor.opacity(0.15))
-        )
+        .glassEffect(.regular.tint(.accentColor), in: .rect(cornerRadius: 16))
     }
 }
 
