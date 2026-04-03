@@ -36,6 +36,12 @@ struct SidebarView: View {
                     .tag(thread.id)
                     .lineLimit(1)
                     .contextMenu {
+                        if let kagiId = thread.kagiThreadId {
+                            Button("Copy Link") {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString("https://kagi.com/assistant/\(kagiId)", forType: .string)
+                            }
+                        }
                         Button("Delete", role: .destructive) {
                             viewModel.deleteThread(thread)
                         }

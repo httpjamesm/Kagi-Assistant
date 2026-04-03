@@ -272,12 +272,25 @@ final class ChatViewModel {
             for dto in dtos {
                 let documentAttachments: [ChatAttachment] = dto.documents?.compactMap { document -> ChatAttachment? in
                     guard let name = document.name, !name.isEmpty else { return nil }
+
+                    var thumbnailData: Data? = nil
+                    var thumbnailMimeType: String? = nil
+                    if let dataURI = document.data, !dataURI.isEmpty,
+                       dataURI.hasPrefix("data:image/"),
+                       let semiIndex = dataURI.firstIndex(of: ";"),
+                       let commaIndex = dataURI.firstIndex(of: ",") {
+                        let mimeType = String(dataURI[dataURI.index(dataURI.startIndex, offsetBy: 5)..<semiIndex])
+                        let base64String = String(dataURI[dataURI.index(after: commaIndex)...])
+                        thumbnailData = Data(base64Encoded: base64String)
+                        thumbnailMimeType = mimeType
+                    }
+
                     return ChatAttachment(
                         name: name,
                         mimeType: document.mime ?? "application/octet-stream",
                         data: nil,
-                        thumbnailData: nil,
-                        thumbnailMimeType: nil
+                        thumbnailData: thumbnailData,
+                        thumbnailMimeType: thumbnailMimeType
                     )
                 } ?? []
 

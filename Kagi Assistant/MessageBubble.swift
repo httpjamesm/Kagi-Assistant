@@ -125,7 +125,37 @@ struct AttachmentChip: View {
         return ByteCountFormatter.string(fromByteCount: Int64(byteCount), countStyle: .file)
     }
 
+    private var thumbnailImage: NSImage? {
+        guard let data = attachment.thumbnailData else { return nil }
+        return NSImage(data: data)
+    }
+
     var body: some View {
+        if let image = thumbnailImage {
+            thumbnailView(image: image)
+        } else {
+            chipView
+        }
+    }
+
+    private func thumbnailView(image: NSImage) -> some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            Image(nsImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(maxWidth: 128, maxHeight: 128)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            if style == .composer, let onRemove {
+                Button(action: onRemove) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var chipView: some View {
         HStack(spacing: 6) {
             Image(systemName: "doc")
                 .foregroundStyle(.secondary)
