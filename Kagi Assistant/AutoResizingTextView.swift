@@ -24,7 +24,8 @@ private class InputTextView: NSTextView {
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "a" {
+        if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "a",
+           window?.firstResponder == self {
             selectAll(nil)
             return true
         }

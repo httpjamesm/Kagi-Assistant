@@ -120,8 +120,10 @@ struct KagiThreadEntry: Identifiable, Sendable {
 
 struct KagiSearchResult: Decodable {
     let thread_id: String
-    let title: String
+    let message_id: String?
+    let branch_id: String?
     let snippet: String?
+    let rank: Double?
 }
 
 // MARK: - HI payload
@@ -304,6 +306,7 @@ actor KagiAPIClient {
     }
 
     func fetchThread(threadId: String) async throws -> (title: String, messages: [KagiMessageDTO]) {
+        print(threadId)
         let url = baseURL.appendingPathComponent("assistant/\(threadId)")
         var request = try makeRequest(url: url)
         request.httpMethod = "GET"

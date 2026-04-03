@@ -23,6 +23,11 @@ struct SidebarView: View {
                         await viewModel.searchAndSelectThread(query: searchText)
                     }
                 }
+                .onChange(of: searchText) {
+                    if searchText.isEmpty {
+                        Task { await viewModel.fetchThreads() }
+                    }
+                }
 
             Divider()
 

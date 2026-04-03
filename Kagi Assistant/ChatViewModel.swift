@@ -316,18 +316,49 @@ final class ChatViewModel {
     }
 
     func searchAndSelectThread(query: String) async {
-        let results = (try? await api.searchThreads(query: query)) ?? []
-        guard let first = results.first else { return }
+        guard let allResults = try? await api.searchThreads(query: query),
+              !allResults.isEmpty else { return }
 
-        // Find or create the thread
-        if let existing = threads.first(where: { $0.kagiThreadId == first.thread_id }) {
-            await selectThread(existing)
-        } else {
-            let thread = ChatThread(name: first.title, kagiThreadId: first.thread_id)
-            await MainActor.run {
-                threads.insert(thread, at: 0)
+        // Deduplicate by thread_id, keep top 10
+        var seen = Set<String>()
+        let results = allResults.filter { seen.insert($0.thread_id).inserted }.prefix(10)
+
+        // Reuse already-loaded threads where possible, otherwise create with
+        // a placeholder name — selectThread will fetch the real title.
+        let matchedThreads: [ChatThread] = results.map { result in
+            if let existing = threads.first(where: { $0.kagiThreadId == result.thread_id }) {
+                return existing
             }
-            await selectThread(thread)
+            return ChatThread(name: "Loading…", kagiThreadId: result.thread_id)
+        }
+
+        await MainActor.run {
+            threads = matchedThreads
+            selectedThreadID = matchedThreads.first?.id
+        }
+
+        // Fetch titles for all newly created threads concurrently
+        await withTaskGroup(of: (String, String).self) { group in
+            for thread in matchedThreads {
+                guard thread.messages.isEmpty, let kagiId = thread.kagiThreadId else { continue }
+                let threadId = thread.id.uuidString
+                group.addTask { [api] in
+                    let title = (try? await api.fetchThread(threadId: kagiId).title) ?? ""
+                    return (threadId, title)
+                }
+            }
+            for await (threadIdStr, title) in group {
+                guard !title.isEmpty else { continue }
+                await MainActor.run {
+                    if let idx = self.threads.firstIndex(where: { $0.id.uuidString == threadIdStr }) {
+                        self.threads[idx].name = title
+                    }
+                }
+            }
+        }
+
+        if let first = matchedThreads.first {
+            await selectThread(first)
         }
     }
 
