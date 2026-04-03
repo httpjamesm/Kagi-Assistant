@@ -8,6 +8,7 @@ import ImageIO
 import UniformTypeIdentifiers
 
 @Observable
+@MainActor
 final class ChatViewModel {
     var threads: [ChatThread] = []
     var selectedThreadID: UUID? {
@@ -537,8 +538,6 @@ final class ChatViewModel {
             threads[idx].messages[msgIdx].citations = citations
             threads[idx].messages[msgIdx].isStreaming = false
         }
-        isStreaming = false
-        currentTraceId = nil
     }
 
     private func loadAttachment(from url: URL) -> ChatAttachment? {
