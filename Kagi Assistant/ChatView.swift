@@ -15,6 +15,7 @@ struct ChatView: View {
     @State private var textEditorHeight: CGFloat = 32
     @State private var shouldAutoScroll = true
     @State private var showAccountPopover = false
+    @State private var focusTrigger = false
     private let chatContentMaxWidth: CGFloat = 750
 
     var body: some View {
@@ -26,7 +27,10 @@ struct ChatView: View {
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     inputArea
                 }
-            .ignoresSafeArea(edges: .top)
+                .ignoresSafeArea(edges: .top)
+                .onChange(of: viewModel.selectedThread) {
+                    focusTrigger.toggle()
+                }
         } else {
             ContentUnavailableView(
                 "No Chat Selected",
@@ -212,6 +216,7 @@ struct ChatView: View {
                     desiredHeight: $textEditorHeight,
                     maxLines: 10,
                     placeholder: viewModel.isAuthenticated ? "Type a message..." : "Log in to start chatting...",
+                    requestFocus: focusTrigger,
                     onSend: { send() }
                 )
                 .frame(height: textEditorHeight)
@@ -334,6 +339,7 @@ struct AutoResizingTextView: NSViewRepresentable {
     @Binding var desiredHeight: CGFloat
     var maxLines: Int
     var placeholder: String
+    var requestFocus: Bool = false
     var onSend: (() -> Void)?
 
     func makeCoordinator() -> Coordinator {
@@ -387,6 +393,13 @@ struct AutoResizingTextView: NSViewRepresentable {
             context.coordinator.recalcHeight()
         }
 
+        if requestFocus != context.coordinator.lastFocusTrigger {
+            context.coordinator.lastFocusTrigger = requestFocus
+            DispatchQueue.main.async {
+                textView.window?.makeFirstResponder(textView)
+            }
+        }
+
         textView.onSend = onSend
         context.coordinator.parent = self
         context.coordinator.updatePlaceholder()
@@ -395,6 +408,7 @@ struct AutoResizingTextView: NSViewRepresentable {
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: AutoResizingTextView
         weak var textView: NSTextView?
+        var lastFocusTrigger = false
         private var placeholderView: NSTextField?
 
         init(_ parent: AutoResizingTextView) {
