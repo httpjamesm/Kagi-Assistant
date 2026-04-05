@@ -8,8 +8,25 @@ import SwiftUI
 import WebKit
 
 private class NonScrollableWebView: WKWebView {
+    private var isHorizontalScrolling = false
+
     override func scrollWheel(with event: NSEvent) {
-        nextResponder?.scrollWheel(with: event)
+        // Allow horizontal scroll events to be handled by the web view
+        // (e.g. for horizontally-scrollable tables) while forwarding
+        // vertical scrolls to the parent scroll view.
+        if event.phase == .began {
+            isHorizontalScrolling = abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY)
+        }
+
+        if isHorizontalScrolling {
+            super.scrollWheel(with: event)
+        } else {
+            nextResponder?.scrollWheel(with: event)
+        }
+
+        if event.phase == .ended || event.phase == .cancelled {
+            isHorizontalScrolling = false
+        }
     }
 }
 
@@ -188,9 +205,20 @@ struct HTMLMessageView: NSViewRepresentable {
             observer.observe(document.body, { childList: true, subtree: true, characterData: true });
             window.addEventListener('load', notifyHeight);
 
+            function enhanceTables() {
+                document.querySelectorAll('table').forEach((table) => {
+                    if (table.parentElement && table.parentElement.classList.contains('table-wrapper')) return;
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'table-wrapper';
+                    table.parentNode.insertBefore(wrapper, table);
+                    wrapper.appendChild(table);
+                });
+            }
+
             function setContent(html) {
                 document.getElementById('content').innerHTML = html;
                 enhanceCodeBlocks();
+                enhanceTables();
                 notifyHeight();
             }
         </script>
