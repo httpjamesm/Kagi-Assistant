@@ -125,10 +125,6 @@ struct HTMLMessageView: NSViewRepresentable {
                 return button;
             }
 
-            function shouldEnhanceInlineCode(code) {
-                const text = (code.innerText || '').trim();
-                return text.length >= 24 || /[\\/]/.test(text);
-            }
 
             function createCodeBlockHeader(label, getText) {
                 const header = document.createElement('div');
@@ -164,41 +160,32 @@ struct HTMLMessageView: NSViewRepresentable {
                     const text = (target.innerText || '').trim();
                     if (!text) return;
 
-                    const label = codeHiliteLabel(pre);
                     let container = pre.parentElement;
+                    const hasLanguage = container && container.classList.contains('codehilite');
 
-                    if (!container || !container.classList.contains('codehilite')) {
+                    if (!hasLanguage) {
+                        // Plain code block — wrap in styled container but no header
                         container = document.createElement('div');
                         container.className = 'code-block';
                         pre.parentNode.insertBefore(container, pre);
                         container.appendChild(pre);
                     } else {
+                        const label = codeHiliteLabel(pre);
                         container.classList.add('code-block');
-                    }
 
-                    const hasHeader = Array.from(container.children).some((child) => child.classList && child.classList.contains('code-block-header'));
-                    if (!hasHeader) {
-                        container.insertBefore(
-                            createCodeBlockHeader(label, () => (target.innerText || '').trim()),
-                            container.firstChild
-                        );
+                        const hasHeader = Array.from(container.children).some((child) => child.classList && child.classList.contains('code-block-header'));
+                        if (!hasHeader) {
+                            container.insertBefore(
+                                createCodeBlockHeader(label, () => (target.innerText || '').trim()),
+                                container.firstChild
+                            );
+                        }
                     }
 
                     pre.dataset.copyEnhanced = 'true';
                     pre.classList.add('copyable-pre');
                 });
 
-                document.querySelectorAll('code:not(pre code)').forEach((code) => {
-                    if (code.dataset.copyEnhanced === 'true' || !shouldEnhanceInlineCode(code)) return;
-                    if (!code.parentNode) return;
-
-                    const wrapper = document.createElement('span');
-                    wrapper.className = 'inline-code-copy';
-                    code.parentNode.insertBefore(wrapper, code);
-                    wrapper.appendChild(code);
-                    wrapper.appendChild(createCopyButton(() => (code.innerText || '').trim()));
-                    code.dataset.copyEnhanced = 'true';
-                });
             }
 
             const observer = new MutationObserver(notifyHeight);
