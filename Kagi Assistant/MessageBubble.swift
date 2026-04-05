@@ -78,6 +78,7 @@ struct UserMessageContent: View {
     let content: String
     @State private var isExpanded = false
 
+
     private let characterLimit = 500
 
     private var isTruncated: Bool { content.count > characterLimit }
@@ -93,6 +94,7 @@ struct UserMessageContent: View {
         VStack(alignment: .trailing, spacing: 4) {
             Text(displayedText)
                 .textSelection(.enabled)
+                .foregroundStyle(.white)
 
             if isTruncated {
                 Button(isExpanded ? "Read Less" : "Read More") {
