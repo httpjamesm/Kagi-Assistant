@@ -191,12 +191,22 @@ struct AttachmentChip: View {
 // MARK: - Segment HTML View
 
 /// Wrapper that gives each HTML segment its own height state.
+/// Fades in once the web view has reported its measured height
+/// to avoid a visible layout jump.
 struct SegmentHTMLView: View {
     let html: String
     @State private var height: CGFloat = 1
+    @State private var measured = false
 
     var body: some View {
         HTMLMessageView(html: html, dynamicHeight: $height)
             .frame(height: height)
+            .opacity(measured ? 1 : 0)
+            .animation(.easeIn(duration: 0.15), value: measured)
+            .onChange(of: height) {
+                if !measured && height > 1 {
+                    measured = true
+                }
+            }
     }
 }
