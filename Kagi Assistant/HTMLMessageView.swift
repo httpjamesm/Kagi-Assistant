@@ -70,8 +70,11 @@ struct HTMLMessageView: NSViewRepresentable {
         <div id="content"></div>
         <script>
             function notifyHeight() {
-                const h = document.body.scrollHeight;
-                window.webkit.messageHandlers.heightChanged.postMessage(h);
+                requestAnimationFrame(() => {
+                    const content = document.getElementById('content');
+                    const h = Math.ceil(content.getBoundingClientRect().bottom);
+                    window.webkit.messageHandlers.heightChanged.postMessage(h);
+                });
             }
 
             function updateCopyButton(button, copied) {
