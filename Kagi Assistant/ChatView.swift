@@ -136,9 +136,10 @@ struct ChatView: View {
             } label: {
                 Image(systemName: "square.and.pencil")
                     .frame(width: 18, height: 18)
+                    .padding(6)
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
-            .padding(6)
             .glassEffect(.regular.interactive(), in: .circle)
             .help("New Chat")
         }
@@ -184,9 +185,10 @@ struct ChatView: View {
                 Image(systemName: "person.crop.circle.badge.plus")
                     .frame(width: 18, height: 18)
                     .padding(6)
-                    .glassEffect(.regular.interactive(), in: .circle)
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
+            .glassEffect(.regular.interactive(), in: .circle)
             .help("Sign In")
         }
     }
@@ -212,9 +214,10 @@ struct ChatView: View {
                     Image(systemName: viewModel.internetAccess ? "network" : "network.slash")
                         .frame(width: 18, height: 18)
                         .foregroundStyle(viewModel.internetAccess ? .primary : .secondary)
+                        .padding(6)
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .padding(6)
                 .glassEffect(.regular.interactive(), in: .circle)
                 .help(viewModel.internetAccess ? "Internet access enabled" : "Internet access disabled")
                 if viewModel.selectedModelHasThinkingVariant {
@@ -224,9 +227,10 @@ struct ChatView: View {
                         Image(systemName: viewModel.thinkingEnabled ? "lightbulb.fill" : "lightbulb")
                             .frame(width: 18, height: 18)
                             .foregroundStyle(viewModel.thinkingEnabled ? .yellow : .secondary)
+                            .padding(6)
+                            .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
-                    .padding(6)
                     .glassEffect(.regular.interactive(), in: .circle)
                     .help(viewModel.thinkingEnabled ? "Thinking enabled" : "Enable thinking")
                 }
@@ -235,9 +239,10 @@ struct ChatView: View {
                 } label: {
                     Image(systemName: "plus.circle")
                         .frame(width: 18, height: 18)
+                        .padding(6)
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .padding(6)
                 .glassEffect(.regular.interactive(), in: .circle)
                 .help("Attach files")
                 .disabled(viewModel.isStreaming)
@@ -260,9 +265,10 @@ struct ChatView: View {
                         Image(systemName: "stop.fill")
                             .frame(width: 18, height: 18)
                             .foregroundStyle(.red)
+                            .padding(6)
+                            .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
-                    .padding(6)
                     .glassEffect(.regular.interactive(), in: .circle)
                     .help("Stop generation")
                 } else {
@@ -301,9 +307,10 @@ struct ChatView: View {
                 .fontWeight(.semibold)
                 .frame(width: 18, height: 18)
                 .foregroundStyle(canSend ? .white : .primary)
+                .padding(6)
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .padding(6)
         .disabled(!canSend)
 
         if canSend {
