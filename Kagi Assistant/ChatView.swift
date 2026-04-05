@@ -16,6 +16,7 @@ struct ChatView: View {
     @State private var shouldAutoScroll = true
     @State private var showAccountPopover = false
     @State private var focusTrigger = false
+    @State private var keyMonitor: Any?
     private let chatContentMaxWidth: CGFloat = 750
 
     var body: some View {
@@ -30,6 +31,23 @@ struct ChatView: View {
                 .ignoresSafeArea(edges: .top)
                 .onChange(of: viewModel.selectedThread) {
                     focusTrigger.toggle()
+                }
+                .onAppear {
+                    keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                        if event.charactersIgnoringModifiers == "/",
+                           event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty,
+                           !(event.window?.firstResponder is NSTextView) {
+                            focusTrigger.toggle()
+                            return nil
+                        }
+                        return event
+                    }
+                }
+                .onDisappear {
+                    if let keyMonitor {
+                        NSEvent.removeMonitor(keyMonitor)
+                    }
+                    keyMonitor = nil
                 }
         } else {
             ContentUnavailableView(
