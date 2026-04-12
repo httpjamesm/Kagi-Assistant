@@ -5,11 +5,19 @@
 
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
+
+struct PastedImageData {
+    let data: Data
+    let mimeType: String
+    let contentType: UTType?
+}
 
 // MARK: - Auto-resizing NSTextView wrapper
 
 private class InputTextView: NSTextView {
     var onSend: (() -> Void)?
+    var onPasteImages: (([PastedImageData]) -> Void)?
 
     override func keyDown(with event: NSEvent) {
         if event.keyCode == 36 { // Return
@@ -31,6 +39,53 @@ private class InputTextView: NSTextView {
         }
         return super.performKeyEquivalent(with: event)
     }
+
+    override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
+        if item.action == #selector(paste(_:)),
+           onPasteImages != nil,
+           pasteboardHasImages(NSPasteboard.general) {
+            return true
+        }
+        return super.validateUserInterfaceItem(item)
+    }
+
+    override func paste(_ sender: Any?) {
+        let pastedImages = imageData(from: NSPasteboard.general)
+        if let onPasteImages, !pastedImages.isEmpty {
+            onPasteImages(pastedImages)
+            return
+        }
+
+        super.paste(sender)
+    }
+
+    private func pasteboardHasImages(_ pasteboard: NSPasteboard) -> Bool {
+        guard let items = pasteboard.pasteboardItems else { return false }
+        return items.contains { item in
+            item.types.contains { UTType($0.rawValue)?.conforms(to: .image) == true }
+        }
+    }
+
+    private func imageData(from pasteboard: NSPasteboard) -> [PastedImageData] {
+        guard let items = pasteboard.pasteboardItems else { return [] }
+
+        return items.compactMap { item in
+            for type in item.types {
+                guard let contentType = UTType(type.rawValue), contentType.conforms(to: .image),
+                      let data = item.data(forType: type) else {
+                    continue
+                }
+
+                return PastedImageData(
+                    data: data,
+                    mimeType: contentType.preferredMIMEType ?? "application/octet-stream",
+                    contentType: contentType
+                )
+            }
+
+            return nil
+        }
+    }
 }
 
 struct AutoResizingTextView: NSViewRepresentable {
@@ -40,6 +95,7 @@ struct AutoResizingTextView: NSViewRepresentable {
     var placeholder: String
     var requestFocus: Bool = false
     var onSend: (() -> Void)?
+    var onPasteImages: (([PastedImageData]) -> Void)?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -55,6 +111,7 @@ struct AutoResizingTextView: NSViewRepresentable {
 
         let textView = InputTextView()
         textView.onSend = onSend
+        textView.onPasteImages = onPasteImages
         textView.delegate = context.coordinator
         textView.font = NSFont.preferredFont(forTextStyle: .body)
         textView.textColor = NSColor.labelColor
@@ -100,6 +157,7 @@ struct AutoResizingTextView: NSViewRepresentable {
         }
 
         textView.onSend = onSend
+        textView.onPasteImages = onPasteImages
         context.coordinator.parent = self
         context.coordinator.updatePlaceholder()
     }

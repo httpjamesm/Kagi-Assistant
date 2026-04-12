@@ -572,12 +572,28 @@ final class ChatViewModel {
 
     func addAttachments(from urls: [URL]) {
         let newAttachments = urls.compactMap(loadAttachment(from:))
-        var seenKeys = Set(composerAttachments.map(attachmentKey(for:)))
-        let uniqueAttachments = newAttachments.filter { attachment in
-            let key = attachmentKey(for: attachment)
-            return seenKeys.insert(key).inserted
+        appendComposerAttachments(newAttachments)
+    }
+
+    func addPastedImages(_ images: [PastedImageData]) {
+        let newAttachments = images.map { image in
+            let normalizedImage = normalizedPastedImage(image)
+            let thumbnail = makeThumbnail(
+                for: normalizedImage.data,
+                contentType: normalizedImage.contentType,
+                mimeType: normalizedImage.mimeType
+            )
+            let fileExtension = normalizedImage.contentType?.preferredFilenameExtension ?? "png"
+            return ChatAttachment(
+                name: "Pasted Image \(String(UUID().uuidString.prefix(8))).\(fileExtension)",
+                mimeType: normalizedImage.mimeType,
+                data: normalizedImage.data,
+                thumbnailData: thumbnail?.data,
+                thumbnailMimeType: thumbnail?.mimeType
+            )
         }
-        composerAttachments.append(contentsOf: uniqueAttachments)
+
+        appendComposerAttachments(newAttachments)
     }
 
     func removeComposerAttachment(_ attachment: ChatAttachment) {
@@ -637,6 +653,26 @@ final class ChatViewModel {
 
     private func attachmentKey(for attachment: ChatAttachment) -> String {
         "\(attachment.name)|\(attachment.mimeType)|\(attachment.byteCount ?? 0)"
+    }
+
+    private func appendComposerAttachments(_ newAttachments: [ChatAttachment]) {
+        var seenKeys = Set(composerAttachments.map(attachmentKey(for:)))
+        let uniqueAttachments = newAttachments.filter { attachment in
+            let key = attachmentKey(for: attachment)
+            return seenKeys.insert(key).inserted
+        }
+        composerAttachments.append(contentsOf: uniqueAttachments)
+    }
+
+    private func normalizedPastedImage(_ image: PastedImageData) -> PastedImageData {
+        guard image.contentType == .tiff || image.mimeType == "image/tiff",
+              let source = CGImageSourceCreateWithData(image.data as CFData, nil),
+              let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil),
+              let pngData = encodeThumbnail(cgImage, uti: UTType.png.identifier as CFString) else {
+            return image
+        }
+
+        return PastedImageData(data: pngData, mimeType: "image/png", contentType: .png)
     }
 
     private func makeThumbnail(for data: Data, contentType: UTType?, mimeType: String) -> (data: Data, mimeType: String)? {

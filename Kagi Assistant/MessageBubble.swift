@@ -141,20 +141,21 @@ struct AttachmentChip: View {
     }
 
     private func thumbnailView(image: NSImage) -> some View {
-        VStack(alignment: .trailing, spacing: 4) {
-            Image(nsImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(maxWidth: 128, maxHeight: 128)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-            if style == .composer, let onRemove {
-                Button(action: onRemove) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
+        Image(nsImage: image)
+            .resizable()
+            .aspectRatio(contentMode: .fill)
+            .frame(maxWidth: 128, maxHeight: 128)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(alignment: .topTrailing) {
+                if style == .composer, let onRemove {
+                    Button(action: onRemove) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.white, .black.opacity(0.55))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(6)
                 }
-                .buttonStyle(.plain)
             }
-        }
     }
 
     private var chipView: some View {

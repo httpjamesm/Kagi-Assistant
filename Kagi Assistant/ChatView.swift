@@ -205,6 +205,9 @@ struct ChatView: View {
                         }
                     }
                 }
+                .padding(.horizontal, 12)
+                .frame(maxWidth: chatContentMaxWidth, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .center)
             }
 
             HStack(alignment: .bottom, spacing: 8) {
@@ -253,7 +256,11 @@ struct ChatView: View {
                     maxLines: 10,
                     placeholder: viewModel.isAuthenticated ? "Type a message..." : "Log in to start chatting...",
                     requestFocus: focusTrigger,
-                    onSend: { send() }
+                    onSend: { send() },
+                    onPasteImages: { images in
+                        guard !viewModel.isStreaming else { return }
+                        viewModel.addPastedImages(images)
+                    }
                 )
                 .frame(height: textEditorHeight)
                 .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 16))
@@ -275,23 +282,26 @@ struct ChatView: View {
                     sendButton
                 }
             }
+            .padding(12)
+            .frame(maxWidth: chatContentMaxWidth, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .center)
         }
-        .padding(12)
         .padding(.top, 12)
-        .frame(maxWidth: chatContentMaxWidth, alignment: .leading)
-        .frame(maxWidth: .infinity, alignment: .center)
-        .background(.ultraThinMaterial)
-        .mask(
-            LinearGradient(
-                stops: [
-                    .init(color: .clear, location: 0),
-                    .init(color: .white, location: 0.4),
-                    .init(color: .white, location: 1.0)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
+        .background {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .mask(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: .white, location: 0.4),
+                            .init(color: .white, location: 1.0)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+        }
     }
 
     private var canSend: Bool {
