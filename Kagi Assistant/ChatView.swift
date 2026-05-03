@@ -17,6 +17,9 @@ struct ChatView: View {
     @State private var showAccountPopover = false
     @State private var focusTrigger = false
     @State private var keyMonitor: Any?
+    @State private var editContext: MessageEditContext?
+    @State private var preEditMessageText = ""
+    @State private var preEditComposerAttachments: [ChatAttachment] = []
     private let chatContentMaxWidth: CGFloat = 750
 
     var body: some View {
@@ -30,6 +33,7 @@ struct ChatView: View {
                 }
                 .ignoresSafeArea(edges: .top)
                 .onChange(of: viewModel.selectedThread) {
+                    cancelEditing()
                     focusTrigger.toggle()
                 }
                 .onAppear {
@@ -63,7 +67,7 @@ struct ChatView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(thread.messages) { message in
-                        MessageBubble(message: message)
+                        MessageBubble(message: message, onEdit: editAction(for: message))
                             .id(message.id)
                     }
                     Color.clear
@@ -195,6 +199,13 @@ struct ChatView: View {
 
     private var inputArea: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if editContext != nil {
+                editModeBanner
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: chatContentMaxWidth, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+
             if !viewModel.composerAttachments.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -248,7 +259,7 @@ struct ChatView: View {
                 .buttonStyle(.plain)
                 .glassEffect(.regular.interactive(), in: .circle)
                 .help("Attach files")
-                .disabled(viewModel.isStreaming)
+                .disabled(viewModel.isStreaming || editContext != nil)
 
                 AutoResizingTextView(
                     text: $messageText,
@@ -258,7 +269,7 @@ struct ChatView: View {
                     requestFocus: focusTrigger,
                     onSend: { send() },
                     onPasteImages: { images in
-                        guard !viewModel.isStreaming else { return }
+                        guard !viewModel.isStreaming, editContext == nil else { return }
                         viewModel.addPastedImages(images)
                     }
                 )
@@ -305,7 +316,29 @@ struct ChatView: View {
     }
 
     private var canSend: Bool {
-        !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !viewModel.composerAttachments.isEmpty
+        if editContext != nil {
+            return !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        return !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !viewModel.composerAttachments.isEmpty
+    }
+
+    private var editModeBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "pencil")
+                .foregroundStyle(.secondary)
+            Text("Editing message")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button("Cancel") {
+                cancelEditing()
+            }
+            .font(.caption)
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .glassEffect(.regular, in: .capsule)
     }
 
     @ViewBuilder
@@ -335,12 +368,51 @@ struct ChatView: View {
     private func send() {
         let trimmedText = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         let attachments = viewModel.composerAttachments
+        if let editContext {
+            guard !viewModel.isStreaming, !trimmedText.isEmpty else { return }
+            let text = messageText
+            messageText = ""
+            viewModel.clearComposerAttachments()
+            self.editContext = nil
+            preEditMessageText = ""
+            preEditComposerAttachments = []
+            viewModel.resendEditedMessage(text, context: editContext)
+            return
+        }
+
         guard !viewModel.isStreaming,
               !trimmedText.isEmpty || !attachments.isEmpty else { return }
         let text = messageText
         messageText = ""
         viewModel.clearComposerAttachments()
         viewModel.sendMessage(text, attachments: attachments)
+    }
+
+    private func editAction(for message: ChatMessage) -> (() -> Void)? {
+        guard message.role == .user, !viewModel.isStreaming, editContext == nil else { return nil }
+        return {
+            beginEditing(message)
+        }
+    }
+
+    private func beginEditing(_ message: ChatMessage) {
+        guard let context = viewModel.beginEditingUserMessage(message) else { return }
+        preEditMessageText = messageText
+        preEditComposerAttachments = viewModel.composerAttachments
+        editContext = context
+        messageText = context.content
+        viewModel.clearComposerAttachments()
+        focusTrigger.toggle()
+    }
+
+    private func cancelEditing() {
+        guard let context = editContext else { return }
+        viewModel.cancelEditingUserMessage(context: context)
+        self.editContext = nil
+        messageText = preEditMessageText
+        viewModel.composerAttachments = preEditComposerAttachments
+        preEditMessageText = ""
+        preEditComposerAttachments = []
     }
 
     private func openAttachmentPicker() {

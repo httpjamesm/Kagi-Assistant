@@ -9,7 +9,9 @@ import SwiftUI
 
 struct MessageBubble: View {
     let message: ChatMessage
+    var onEdit: (() -> Void)? = nil
     @State private var webViewHeight: CGFloat = 1
+    @State private var isHoveringUserBubble = false
 
     private var isUser: Bool { message.role == .user }
 
@@ -29,9 +31,22 @@ struct MessageBubble: View {
         HStack {
             Spacer(minLength: 60)
             VStack(alignment: .trailing, spacing: 4) {
-                Text("You")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    if let onEdit {
+                        Button(action: onEdit) {
+                            Image(systemName: "pencil")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Edit message")
+                        .opacity(isHoveringUserBubble ? 1 : 0)
+                        .animation(.easeInOut(duration: 0.12), value: isHoveringUserBubble)
+                    }
+                    Text("You")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 if !message.content.isEmpty {
                     UserMessageContent(content: message.content)
                 }
@@ -42,6 +57,15 @@ struct MessageBubble: View {
                         }
                     }
                 }
+            }
+            .contentShape(Rectangle())
+            .contextMenu {
+                if let onEdit {
+                    Button("Edit Message", action: onEdit)
+                }
+            }
+            .onHover { hovering in
+                isHoveringUserBubble = hovering
             }
         }
     }

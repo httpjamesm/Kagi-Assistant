@@ -48,6 +48,16 @@ struct ChatMessage: Identifiable, Equatable {
     }
 }
 
+struct MessageEditContext: Equatable {
+    let threadUUID: UUID
+    let threadId: String?
+    let branchId: String?
+    let messageId: String?
+    let content: String
+    let insertionIndex: Int
+    let removedMessages: [ChatMessage]
+}
+
 struct ChatThread: Identifiable, Equatable {
     let id = UUID()
     var kagiThreadId: String?

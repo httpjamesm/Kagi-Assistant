@@ -73,6 +73,27 @@ final class ChatViewModel {
     private let api = KagiAPIClient.shared
     private var streamTask: Task<Void, Never>?
 
+    private enum MessageStreamRequest {
+        case prompt(
+            content: String,
+            threadId: String?,
+            branchId: String?,
+            model: String,
+            profileId: String?,
+            internetAccess: Bool,
+            attachments: [ChatAttachment]
+        )
+        case regenerate(
+            content: String,
+            threadId: String?,
+            messageId: String?,
+            branchId: String?,
+            model: String,
+            profileId: String?,
+            internetAccess: Bool
+        )
+    }
+
     var selectedThread: ChatThread? {
         get {
             threads.first { $0.id == selectedThreadID }
@@ -377,6 +398,50 @@ final class ChatViewModel {
 
     // MARK: - Send Message
 
+    func beginEditingUserMessage(_ message: ChatMessage) -> MessageEditContext? {
+        guard !isStreaming,
+              let threadIndex = threads.firstIndex(where: { $0.id == selectedThreadID }),
+              let messageIndex = threads[threadIndex].messages.firstIndex(where: { $0.id == message.id }),
+              threads[threadIndex].messages[messageIndex].role == .user else {
+            return nil
+        }
+
+        let thread = threads[threadIndex]
+        let previousAssistantMessageId = threads[threadIndex].messages[..<messageIndex]
+            .last { $0.role == .assistant && $0.kagiMessageId != nil }?
+            .kagiMessageId
+        let removalEndIndex = threads[threadIndex].messages.index(before: threads[threadIndex].messages.endIndex)
+        let removedMessages = Array(threads[threadIndex].messages[messageIndex...removalEndIndex])
+
+        let context = MessageEditContext(
+            threadUUID: thread.id,
+            threadId: thread.kagiThreadId,
+            branchId: thread.branchId,
+            messageId: previousAssistantMessageId,
+            content: message.content,
+            insertionIndex: messageIndex,
+            removedMessages: removedMessages
+        )
+
+        threads[threadIndex].messages.removeSubrange(messageIndex...removalEndIndex)
+
+        return context
+    }
+
+    func cancelEditingUserMessage(context: MessageEditContext) {
+        guard let threadIndex = threads.firstIndex(where: { $0.id == context.threadUUID }),
+              !context.removedMessages.isEmpty else {
+            return
+        }
+
+        let existingIds = Set(threads[threadIndex].messages.map(\.id))
+        let messagesToRestore = context.removedMessages.filter { !existingIds.contains($0.id) }
+        guard !messagesToRestore.isEmpty else { return }
+
+        let insertionIndex = min(context.insertionIndex, threads[threadIndex].messages.count)
+        threads[threadIndex].messages.insert(contentsOf: messagesToRestore, at: insertionIndex)
+    }
+
     func sendMessage(_ content: String, attachments: [ChatAttachment] = []) {
         let trimmedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedContent.isEmpty || !attachments.isEmpty,
@@ -416,6 +481,64 @@ final class ChatViewModel {
         threads[index].messages.append(assistantMsg)
         let assistantMsgId = assistantMsg.id
 
+        startStreamingResponse(
+            threadUUID: threadUUID,
+            assistantMsgId: assistantMsgId,
+            request: .prompt(
+                content: content,
+                threadId: threadId,
+                branchId: branchId,
+                model: model,
+                profileId: profileId,
+                internetAccess: internet,
+                attachments: attachments
+            )
+        )
+    }
+
+    func resendEditedMessage(_ content: String, context: MessageEditContext) {
+        let trimmedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedContent.isEmpty,
+              let index = threads.firstIndex(where: { $0.id == context.threadUUID }) else {
+            return
+        }
+
+        threads[index].messages.append(ChatMessage(role: .user, content: content))
+
+        guard isAuthenticated else {
+            let response = ChatMessage(role: .assistant, content: "Please log in with your Kagi session token to use the assistant.")
+            threads[index].messages.append(response)
+            return
+        }
+
+        let profile = effectiveProfile
+        let model = profile?.model ?? profile?.name ?? "gemini-3-1-flash-lite"
+        let profileId = profile?.id
+        let internet = internetAccess
+        let threadUUID = threads[index].id
+        let threadId = context.threadId ?? threads[index].kagiThreadId
+        let branchId = context.branchId ?? threads[index].branchId
+
+        let assistantMsg = ChatMessage(role: .assistant, content: "", isStreaming: true)
+        threads[index].messages.append(assistantMsg)
+        let assistantMsgId = assistantMsg.id
+
+        startStreamingResponse(
+            threadUUID: threadUUID,
+            assistantMsgId: assistantMsgId,
+            request: .regenerate(
+                content: content,
+                threadId: threadId,
+                messageId: context.messageId,
+                branchId: branchId,
+                model: model,
+                profileId: profileId,
+                internetAccess: internet
+            )
+        )
+    }
+
+    private func startStreamingResponse(threadUUID: UUID, assistantMsgId: UUID, request: MessageStreamRequest) {
         isStreaming = true
         currentTraceId = nil
 
@@ -425,15 +548,29 @@ final class ChatViewModel {
             var accumulatedText = ""
 
             do {
-                let stream = await api.sendPrompt(
-                    prompt: content,
-                    threadId: threadId,
-                    branchId: branchId,
-                    model: model,
-                    profileId: profileId,
-                    internetAccess: internet,
-                    attachments: attachments
-                )
+                let stream: AsyncThrowingStream<StreamChunk, Error>
+                switch request {
+                case let .prompt(content, threadId, branchId, model, profileId, internetAccess, attachments):
+                    stream = await api.sendPrompt(
+                        prompt: content,
+                        threadId: threadId,
+                        branchId: branchId,
+                        model: model,
+                        profileId: profileId,
+                        internetAccess: internetAccess,
+                        attachments: attachments
+                    )
+                case let .regenerate(content, threadId, messageId, branchId, model, profileId, internetAccess):
+                    stream = await api.regenerateMessage(
+                        prompt: content,
+                        threadId: threadId,
+                        messageId: messageId,
+                        branchId: branchId,
+                        model: model,
+                        profileId: profileId,
+                        internetAccess: internetAccess
+                    )
+                }
 
                 for try await chunk in stream {
                     guard !Task.isCancelled else { break }
@@ -509,7 +646,7 @@ final class ChatViewModel {
                     }
                 }
 
-                // If stream ended without new_message.json, finalize with accumulated text
+                // If stream ended without new_message.json, finalize with accumulated text.
                 await MainActor.run {
                     if let idx = self.threads.firstIndex(where: { $0.id == threadUUID }),
                        let msgIdx = self.threads[idx].messages.firstIndex(where: { $0.id == assistantMsgId }),
