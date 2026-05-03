@@ -102,7 +102,7 @@ struct UserMessageContent: View {
                 }
                 .font(.caption)
                 .buttonStyle(.plain)
-                .foregroundColor(.accentColor)
+                .foregroundColor(.white)
             }
         }
         .padding(10)
